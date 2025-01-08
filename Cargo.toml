@@ -1,0 +1,10 @@
+[package]
+name = "bjsc"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+
+[dependencies]
+ncurses = "6.0.1"
