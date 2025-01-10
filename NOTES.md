@@ -1,3 +1,24 @@
+Let's start:
+
+X Create a shoe
+X Deal from the shoe
+- One player card
+- One dealer card
+- One player card
+
+- Display all of these
+    - (with an option to display the total next to the hand)
+- Accept an input
+- Compare to basic strategy
+- Report error
+- Count hands/errors
+- Display counts somewhere
+- Repeat until shoe is done
+    - Add option to keep going
+    - Add option to go for % of hands
+
+---
+
 Config Screen
 
 Game:
@@ -8,6 +29,16 @@ Questions:
 Random
 Targeted [Configure]
 
+
+---
+Rules to change:
+
+- Splits allowed
+- BJ payout
+- Double after split
+- surrender
+    - early?
+- Limits
 
 ---------------------------------------------------------------------------
 

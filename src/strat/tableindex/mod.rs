@@ -36,8 +36,8 @@ impl FromStr for TableIndex {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (row_str, col_str) = s.split_once(',').ok_or(())?;
-        let row = RowIndex::from_str(row_str)?;
-        let col = ColIndex::from_str(col_str)?;
+        let row = RowIndex::from_str(row_str.trim())?;
+        let col = ColIndex::from_str(col_str.trim())?;
         TableIndex::new(row, col)
     }
 }
