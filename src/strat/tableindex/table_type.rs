@@ -20,7 +20,7 @@ impl TableType {
                 }
             }
             TableType::Split => {
-                if (1u8..=10).contains(&row) {
+                if (2u8..=21).contains(&row) && row % 2 == 0 {
                     Ok(())
                 } else {
                     Err(())
@@ -84,10 +84,13 @@ mod test {
     #[test]
     fn test_split_range_check() {
         assert!(TableType::Split.range_check(0).is_err());
-        assert!(TableType::Split.range_check(1).is_ok());
+        assert!(TableType::Split.range_check(1).is_err());
         assert!(TableType::Split.range_check(2).is_ok());
         assert!(TableType::Split.range_check(10).is_ok());
         assert!(TableType::Split.range_check(11).is_err());
+        assert!(TableType::Split.range_check(20).is_ok());
+        assert!(TableType::Split.range_check(21).is_err());
+        assert!(TableType::Split.range_check(22).is_err());
     }
 
     #[test]

@@ -1,21 +1,21 @@
 Let's start:
 
-X Create a shoe
-X Deal from the shoe
-- One player card
-- One dealer card
-- One player card
+- [X] Create a shoe
+- [x] Deal from the shoe
+    - [x] One player card
+    - [x] One dealer card
+    - [X] One player card
 
-- Display all of these
-    - (with an option to display the total next to the hand)
-- Accept an input
-- Compare to basic strategy
-- Report error
-- Count hands/errors
-- Display counts somewhere
-- Repeat until shoe is done
-    - Add option to keep going
-    - Add option to go for % of hands
+- [X] Display all of these
+    - [ ] (with an option to display the total next to the hand)
+- [ ] Accept an input
+- [ ] Compare to basic strategy
+- [ ] Report error
+- [ ] Count hands/errors
+- [ ] Display counts somewhere
+- [ ] Repeat until shoe is done
+    - [ ] Add option to keep going
+    - [ ] Add option to go for % of hands
 
 ---
 

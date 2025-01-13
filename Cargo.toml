@@ -7,6 +7,6 @@ edition = "2021"
 
 
 [dependencies]
-crossterm = "0.28.1"
 cursive = "0.21.1"
 rand = "0.8.5"
+thiserror = "2.0.11"

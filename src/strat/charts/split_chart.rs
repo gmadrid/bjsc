@@ -1,80 +1,121 @@
-use crate::strat::charts::ChartAction::{NSpt, SDas, Splt};
-use crate::strat::charts::{as_chart_column, ChartAction};
-use crate::strat::tableindex::{TableIndex, TableType};
+use crate::strat::charts::ChartAction::{NoAc, SDas, Splt};
+use crate::strat::charts::{as_chart_column, Chart, ChartAction};
+use crate::strat::tableindex::ColIndex;
+use crate::{BjError, BjResult, Hand};
 
 // Standard Basic Strategy Pair Splitting from BJA
 const SPLIT_CHART: [[ChartAction; 10]; 10] = [
-    /* A, A */
+    /*  2 (A, A) */
     [Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt],
-    /* 2, 2 */
-    [SDas, SDas, Splt, Splt, Splt, Splt, NSpt, NSpt, NSpt, NSpt],
-    /* 3, 3 */
-    [SDas, SDas, Splt, Splt, Splt, Splt, NSpt, NSpt, NSpt, NSpt],
-    /* 4, 4 */
-    [NSpt, NSpt, NSpt, SDas, SDas, NSpt, NSpt, NSpt, NSpt, NSpt],
-    /* 5, 5 */
-    [NSpt, NSpt, NSpt, NSpt, NSpt, NSpt, NSpt, NSpt, NSpt, NSpt],
-    /* 6, 6 */
-    [SDas, Splt, Splt, Splt, Splt, NSpt, NSpt, NSpt, NSpt, NSpt],
-    /* 7, 7 */
-    [Splt, Splt, Splt, Splt, Splt, Splt, NSpt, NSpt, NSpt, NSpt],
-    /* 8, 8 */
+    /*  4 (2, 2) */
+    [SDas, SDas, Splt, Splt, Splt, Splt, NoAc, NoAc, NoAc, NoAc],
+    /*  6 (3, 3) */
+    [SDas, SDas, Splt, Splt, Splt, Splt, NoAc, NoAc, NoAc, NoAc],
+    /*  8 (4, 4) */
+    [NoAc, NoAc, NoAc, SDas, SDas, NoAc, NoAc, NoAc, NoAc, NoAc],
+    /* 10 (5, 5) */
+    [NoAc, NoAc, NoAc, NoAc, NoAc, NoAc, NoAc, NoAc, NoAc, NoAc],
+    /* 12 (6, 6) */
+    [SDas, Splt, Splt, Splt, Splt, NoAc, NoAc, NoAc, NoAc, NoAc],
+    /* 14 (7, 7) */
+    [Splt, Splt, Splt, Splt, Splt, Splt, NoAc, NoAc, NoAc, NoAc],
+    /* 16 (8, 8) */
     [Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt],
-    /* 9, 9 */
-    [Splt, Splt, Splt, Splt, Splt, NSpt, Splt, Splt, NSpt, NSpt],
-    /* T, T */
-    [NSpt, NSpt, NSpt, NSpt, NSpt, NSpt, NSpt, NSpt, NSpt, NSpt],
+    /* 18 (9, 9) */
+    [Splt, Splt, Splt, Splt, Splt, NoAc, Splt, Splt, NoAc, NoAc],
+    /* 20 (T, T) */
+    [NoAc, NoAc, NoAc, NoAc, NoAc, NoAc, NoAc, NoAc, NoAc, NoAc],
 ];
 
-pub fn lookup(index: TableIndex) -> Result<ChartAction, ()> {
-    if index.table_type() != TableType::Split {
-        return Err(());
+pub struct SplitChart;
+
+impl Chart for SplitChart {
+    fn lookup_action(player_hand: &Hand, dealer_hand: &Hand) -> BjResult<ChartAction> {
+        let dealer_card = dealer_hand.first_card().ok_or(BjError::MissingDealerCard)?;
+        if !player_hand.splittable() {
+            return Ok(NoAc);
+        }
+
+        // `splittable()` checks that the two player cards are the same.
+        let col_index = ColIndex::new_with_card(dealer_card)?;
+        let chart_index = as_chart_column(col_index);
+        // unwrap: it's splittable, so this will work
+        let row = player_hand
+            .first_card()
+            .map(|c| c.value())
+            // An Ace has a value of 11, but it's row 1 in the chart.
+            .map(|v| if v == 11 { 1 } else { v })
+            .unwrap();
+
+        Ok(SPLIT_CHART[(row - 1) as usize][chart_index])
     }
-
-    let row_index = index.row_index();
-    let col_index = index.col_index();
-    let chart_index = as_chart_column(col_index);
-
-    Ok(SPLIT_CHART[(row_index - 1) as usize][chart_index])
 }
+
+// fn lookup(index: TableIndex) -> Result<ChartAction, ()> {
+//     if index.table_type() != TableType::Split {
+//         return Err(());
+//     }
+//
+//     let row_index = index.row_index();
+//     let col_index = index.col_index();
+//     lookup_total_by_index(row_index, col_index)
+// }
+
+// pub fn lookup_total(total: u8, dealer: Card) -> Result<ChartAction, ()> {
+//     lookup_total_by_index(total, ColIndex::new_with_card(dealer)?)
+// }
+//
+// fn lookup_total_by_index(total: u8, col_index: ColIndex) -> Result<ChartAction, ()> {
+//     let chart_index = as_chart_column(col_index);
+//
+//     if total % 2 != 0 {
+//         return Err(());
+//     }
+//
+//     Ok(SPLIT_CHART[(total / 2 - 1) as usize][chart_index])
+// }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::strat::charts::test::ti;
+
+    // (player_hand, dealer_hand) -> ChartAction
+    const LTH_E: fn(&[&str], &[&str]) -> BjResult<ChartAction> =
+        crate::strat::charts::test::lookup_test_hands::<SplitChart>;
+    const LTH: fn(&[&str], &[&str]) -> ChartAction = |p, d| LTH_E(p, d).unwrap();
 
     #[test]
     fn test_lookup() {
-        assert_eq!(SDas, lookup(ti("split:2, 2")).unwrap());
-        assert_eq!(SDas, lookup(ti("split:2, 3")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:2, 4")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:2, 7")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:2, 8")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:2, 10")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:2, 1")).unwrap());
+        assert_eq!(SDas, LTH(&["2H", "2C"], &["2S"]));
+        assert_eq!(SDas, LTH(&["2H", "2C"], &["3S"]));
+        assert_eq!(Splt, LTH(&["2H", "2C"], &["4S"]));
+        assert_eq!(Splt, LTH(&["2H", "2C"], &["7S"]));
+        assert_eq!(NoAc, LTH(&["2H", "2C"], &["8S"]));
+        assert_eq!(NoAc, LTH(&["2H", "2C"], &["TS"]));
+        assert_eq!(NoAc, LTH(&["2H", "2C"], &["AS"]));
 
-        assert_eq!(NSpt, lookup(ti("split:4, 2")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:4, 4")).unwrap());
-        assert_eq!(SDas, lookup(ti("split:4, 5")).unwrap());
-        assert_eq!(SDas, lookup(ti("split:4, 6")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:4, 7")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:4, 10")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:4, 1")).unwrap());
+        assert_eq!(NoAc, LTH(&["4H", "4C"], &["2S"]));
+        assert_eq!(NoAc, LTH(&["4H", "4C"], &["4S"]));
+        assert_eq!(SDas, LTH(&["4H", "4C"], &["5S"]));
+        assert_eq!(SDas, LTH(&["4H", "4C"], &["6S"]));
+        assert_eq!(NoAc, LTH(&["4H", "4C"], &["7S"]));
+        assert_eq!(NoAc, LTH(&["4H", "4C"], &["TS"]));
+        assert_eq!(NoAc, LTH(&["4H", "4C"], &["AS"]));
 
-        assert_eq!(Splt, lookup(ti("split:9, 2")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:9, 6")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:9, 7")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:9, 8")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:9, 9")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:9, 10")).unwrap());
-        assert_eq!(NSpt, lookup(ti("split:9, 1")).unwrap());
+        assert_eq!(Splt, LTH(&["9H", "9C"], &["2S"]));
+        assert_eq!(Splt, LTH(&["9H", "9C"], &["6S"]));
+        assert_eq!(NoAc, LTH(&["9H", "9C"], &["7S"]));
+        assert_eq!(Splt, LTH(&["9H", "9C"], &["8S"]));
+        assert_eq!(Splt, LTH(&["9H", "9C"], &["9S"]));
+        assert_eq!(NoAc, LTH(&["9H", "9C"], &["TS"]));
+        assert_eq!(NoAc, LTH(&["9H", "9C"], &["AS"]));
 
-        assert_eq!(Splt, lookup(ti("split:1, 2")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:1, 6")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:1, 7")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:1, 8")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:1, 9")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:1, 10")).unwrap());
-        assert_eq!(Splt, lookup(ti("split:1, 1")).unwrap());
+        assert_eq!(Splt, LTH(&["AH", "AC"], &["2S"]));
+        assert_eq!(Splt, LTH(&["AH", "AC"], &["6S"]));
+        assert_eq!(Splt, LTH(&["AH", "AC"], &["7S"]));
+        assert_eq!(Splt, LTH(&["AH", "AC"], &["8S"]));
+        assert_eq!(Splt, LTH(&["AH", "AC"], &["9S"]));
+        assert_eq!(Splt, LTH(&["AH", "AC"], &["TS"]));
+        assert_eq!(Splt, LTH(&["AH", "AC"], &["AS"]));
     }
 }

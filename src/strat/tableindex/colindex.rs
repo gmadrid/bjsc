@@ -1,12 +1,22 @@
+use crate::card::Card;
+use crate::{BjError, BjResult};
 use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ColIndex(u8);
 
 impl ColIndex {
-    fn new(val: u8) -> Result<ColIndex, ()> {
+    pub fn new_with_card(card: Card) -> BjResult<Self> {
+        ColIndex::new(card.value())
+    }
+
+    fn new(val: u8) -> BjResult<ColIndex> {
+        if val == 11 {
+            return Ok(ColIndex(1));
+        }
+
         if !(1..=10).contains(&val) {
-            return Err(());
+            return Err(BjError::ValueOutOfRange(val, 1, 10));
         }
         Ok(ColIndex(val))
     }
@@ -17,10 +27,10 @@ impl ColIndex {
 }
 
 impl FromStr for ColIndex {
-    type Err = ();
+    type Err = BjError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val: u8 = s.parse().map_err(|_| ())?;
+        let val: u8 = s.parse().map_err(|e| e)?;
         ColIndex::new(val)
     }
 }

@@ -1,13 +1,67 @@
 use crate::hand::Hand;
 use crate::shoe::Shoe;
+use crate::strat::{lookup_action, ChartAction};
+use crate::BjResult;
+use cursive::style::BaseColor::{Red, White};
+use cursive::style::Style;
+use cursive::theme::ColorStyle;
+use cursive::utils::markup::StyledString;
 
 const NUM_DECKS: usize = 6;
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    Correct(String),
+    Wrong(String),
+    None,
+}
+
+impl Message {
+    pub fn correct(m: impl Into<String>) -> Self {
+        Self::Correct(m.into())
+    }
+
+    pub fn wrong(m: impl Into<String>) -> Self {
+        Self::Wrong(m.into())
+    }
+}
+
+impl Default for Message {
+    fn default() -> Self {
+        Message::None
+    }
+}
+
+impl Into<StyledString> for Message {
+    fn into(self) -> StyledString {
+        match self {
+            Message::Correct(msg) => StyledString::plain(msg),
+            Message::Wrong(msg) => {
+                let style = Style {
+                    effects: Default::default(),
+                    color: ColorStyle::new(Red, White),
+                };
+                StyledString::styled(msg, style)
+            }
+            Message::None => StyledString::plain("WHOOPS"),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct GameState {
     shoe: Shoe,
     player_hand: Hand,
     dealer_hand: Hand,
+    message: Message,
+
+    num_questions: usize,
+    num_wrong: usize,
+}
+
+pub enum GameMode {
+    Playing,
+    Done,
 }
 
 impl GameState {
@@ -19,7 +73,47 @@ impl GameState {
             shoe,
             player_hand: Default::default(),
             dealer_hand: Default::default(),
+            message: Default::default(),
+            num_questions: 0,
+            num_wrong: 0,
         }
+    }
+
+    pub fn num_questions_asked(&self) -> usize {
+        self.num_questions
+    }
+
+    pub fn num_questions_wrong(&self) -> usize {
+        self.num_wrong
+    }
+
+    pub fn answered_right(&mut self) {
+        self.num_questions += 1;
+    }
+
+    pub fn answered_wrong(&mut self) {
+        self.num_wrong += 1;
+        self.num_questions += 1;
+    }
+
+    pub fn message(&self) -> &Message {
+        &self.message
+    }
+
+    pub fn set_message(&mut self, message: Message) {
+        self.message = message;
+    }
+
+    pub fn mode(&self) -> GameMode {
+        if self.shoe.is_done() {
+            GameMode::Done
+        } else {
+            GameMode::Playing
+        }
+    }
+
+    pub fn chart_action(&self) -> BjResult<ChartAction> {
+        lookup_action(&self.player_hand, &self.dealer_hand)
     }
 
     pub fn dealer_hand(&self) -> &Hand {

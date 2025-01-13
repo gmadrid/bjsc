@@ -16,6 +16,18 @@ impl Hand {
         self.soft
     }
 
+    pub fn first_card(&self) -> Option<Card> {
+        self.cards.first().copied()
+    }
+
+    pub fn splittable(&self) -> bool {
+        if self.cards.len() != 2 {
+            false
+        } else {
+            self.cards[0].value() == self.cards[1].value()
+        }
+    }
+
     pub fn cards(&self) -> &[Card] {
         &self.cards
     }
