@@ -57,6 +57,9 @@ mod test {
 
     #[test]
     fn test_range_check_works() {
-        assert_eq!(Err(()), "hard:0".parse::<RowIndex>());
+        assert_eq!(
+            Err(BjError::ValueOutOfRange(0, 2, 21)),
+            "hard:0".parse::<RowIndex>()
+        );
     }
 }

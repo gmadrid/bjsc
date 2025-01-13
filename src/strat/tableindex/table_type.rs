@@ -76,7 +76,10 @@ mod test {
         assert_eq!(TableType::Soft, "soft".parse().unwrap());
         assert_eq!(TableType::Split, "split".parse().unwrap());
         assert_eq!(TableType::Surrender, "surrender".parse().unwrap());
-        assert_eq!(Err(()), "hards".parse::<TableType>());
+        assert_eq!(
+            Err(BjError::UnknownTableType("hards".to_string())),
+            "hards".parse::<TableType>()
+        );
     }
 
     #[test]

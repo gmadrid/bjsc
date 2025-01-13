@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Eq, PartialEq)]
 pub enum BjError {
     #[error("An expected Dealer card was missing.")]
     MissingDealerCard,
