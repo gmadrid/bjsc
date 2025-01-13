@@ -35,9 +35,9 @@ impl From<Message> for StyledString {
             Message::Wrong(msg) => {
                 let style = Style {
                     effects: Default::default(),
-                    color: ColorStyle::new(Red, White),
+                    color: ColorStyle::new(White, Red.dark()),
                 };
-                StyledString::styled(msg, style)
+                StyledString::styled(format!(" {} ", msg), style)
             }
             Message::None => StyledString::plain("WHOOPS"),
         }

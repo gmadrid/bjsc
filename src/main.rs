@@ -131,39 +131,6 @@ fn process_input(event: &Event) -> Option<EventResult> {
     } else {
         None
     }
-
-    // siv.with_user_data(|sgs: &mut SharedGameState| {
-    //     // unwrap: poisoned means nothing will work.
-    //     let mut game_state = sgs.write().unwrap();
-    //     if let Ok(chart_action) = game_state.chart_action() {
-    //         if let Some(last_input) = game_state.last_input() {
-    //             if let Some(action) = Action::from_key(last_input) {
-    //                 if Some(action) == chart_action.apply_rules() {
-    //                     game_state.answered_right();
-    //                     game_state.set_message(Message::correct(format!("Correct: {}", action)));
-    //                 } else {
-    //                     game_state.answered_wrong();
-    //                     game_state
-    //                         .set_message(Message::wrong(format!("WRONG: {}", action.to_string())));
-    //                 }
-    //             } else {
-    //                 dbg!("3");
-    //             }
-    //         } else {
-    //             dbg!("2");
-    //         }
-    //     } else {
-    //         dbg!("1");
-    //     }
-    //
-    //     game_state.deal_a_hand();
-    // });
-
-    // siv.cb_sink().send(Box::new(move |s| {
-    //     update_hands(s);
-    //     update_score(s);
-    //     update_status_message(s);
-    // }));
 }
 
 fn make_keymap() -> impl View {
@@ -200,7 +167,7 @@ fn create_ui(siv: &mut CursiveRunnable) {
 
 fn make_status_message() -> impl View {
     TextView::new("")
-        .h_align(HAlign::Center)
+        .h_align(HAlign::Left)
         .v_align(VAlign::Center)
         .with_name("status")
         .full_screen()

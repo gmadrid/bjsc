@@ -1,3 +1,20 @@
+# Next tasks
+
+So, we finished those starting tasks. Let's list stuff that comes next.
+
+If I want to learn basic strategy, I think the next area of focus should be Leitner box. To do this, I need to:
+
+- [ ] Map questions to TableIndex
+- [ ] Generate hands that match a TableIndex
+- [ ] make a big table of TableIndices with
+    - [ ] number of expressions
+    - [ ] number of wrong answers
+    - [ ] last expression time
+    - [ ] leitner box number
+- [ ] save/load the question table
+
+# Starting tasks
+
 Let's start:
 
 - [X] Create a shoe
@@ -8,12 +25,12 @@ Let's start:
 
 - [X] Display all of these
     - [ ] (with an option to display the total next to the hand)
-- [ ] Accept an input
-- [ ] Compare to basic strategy
-- [ ] Report error
-- [ ] Count hands/errors
-- [ ] Display counts somewhere
-- [ ] Repeat until shoe is done
+- [X] Accept an input
+- [X] Compare to basic strategy
+- [X] Report error
+- [X] Count hands/errors
+- [X] Display counts somewhere
+- [X] Repeat until shoe is done
     - [ ] Add option to keep going
     - [ ] Add option to go for % of hands
 
