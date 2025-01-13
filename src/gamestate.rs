@@ -2,50 +2,11 @@ use crate::hand::Hand;
 use crate::shoe::Shoe;
 use crate::strat::{lookup_action, ChartAction};
 use crate::BjResult;
-use cursive::style::BaseColor::{Red, White};
-use cursive::style::Style;
-use cursive::theme::ColorStyle;
-use cursive::utils::markup::StyledString;
 
 const NUM_DECKS: usize = 6;
 
-#[derive(Debug, Default, Clone)]
-pub enum Message {
-    Correct(String),
-    Wrong(String),
-
-    #[default]
-    None,
-}
-
-impl Message {
-    pub fn correct(m: impl Into<String>) -> Self {
-        Self::Correct(m.into())
-    }
-
-    pub fn wrong(m: impl Into<String>) -> Self {
-        Self::Wrong(m.into())
-    }
-}
-
-impl From<Message> for StyledString {
-    fn from(value: Message) -> Self {
-        match value {
-            Message::Correct(msg) => StyledString::plain(msg),
-            Message::Wrong(msg) => {
-                let style = Style {
-                    effects: Default::default(),
-                    color: ColorStyle::new(White, Red.dark()),
-                };
-                StyledString::styled(format!(" {} ", msg), style)
-            }
-            Message::None => StyledString::plain("WHOOPS"),
-        }
-    }
-}
-
 #[derive(Debug)]
-pub struct GameState {
+pub struct GameState<Message> {
     shoe: Shoe,
     player_hand: Hand,
     dealer_hand: Hand,
@@ -60,7 +21,7 @@ pub enum GameMode {
     Done,
 }
 
-impl GameState {
+impl<Message: Default> GameState<Message> {
     pub fn new() -> Self {
         let mut shoe = Shoe::new(NUM_DECKS);
         shoe.shuffle();
@@ -147,7 +108,7 @@ impl GameState {
     }
 }
 
-impl Default for GameState {
+impl<Message: Default> Default for GameState<Message> {
     fn default() -> Self {
         Self::new()
     }

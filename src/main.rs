@@ -1,4 +1,5 @@
-use bjsc::{Action, GameState, Hand, Message};
+use crate::game_message::GameMessage;
+use bjsc::{Action, GameState, Hand};
 use cursive::align::{HAlign, VAlign};
 use cursive::event::{Event, EventResult};
 use cursive::style::BaseColor::Blue;
@@ -12,7 +13,11 @@ use cursive::views::{DummyView, LinearLayout, OnEventView, Panel, TextView};
 use cursive::{Cursive, CursiveRunnable, View};
 use std::sync::{Arc, RwLock};
 
-type SharedGameState = Arc<RwLock<GameState>>;
+mod game_message;
+
+// TODO: pick better names for these.
+type FullGameState = GameState<GameMessage>;
+type SharedGameState = Arc<RwLock<FullGameState>>;
 
 fn create_theme() -> Theme {
     let mut theme = Theme::retro();
@@ -20,12 +25,12 @@ fn create_theme() -> Theme {
     theme
 }
 
-fn make_dealer_hand(gs: &GameState) -> impl View {
+fn make_dealer_hand(gs: &FullGameState) -> impl View {
     let hand = gs.dealer_hand();
     make_hand_view("Dealer", "dealer_hand", hand)
 }
 
-fn make_player_hand(gs: &GameState) -> impl View {
+fn make_player_hand(gs: &FullGameState) -> impl View {
     let hand = gs.player_hand();
     make_hand_view("Player", "player_hand", hand)
 }
@@ -60,7 +65,7 @@ fn make_hand_string(hand: &Hand, title: &str) -> SpannedString<Style> {
     ss
 }
 
-fn make_score(gs: &GameState) -> impl View {
+fn make_score(gs: &FullGameState) -> impl View {
     let ss = score_string(gs);
 
     TextView::new(ss).with_name("score")
@@ -80,7 +85,7 @@ fn update_score(siv: &mut Cursive) {
     });
 }
 
-fn score_string(gs: &GameState) -> SpannedString<Style> {
+fn score_string(gs: &FullGameState) -> SpannedString<Style> {
     let mut ss = SpannedString::styled("Errors: ", Style::title_primary());
     ss.append_plain(gs.num_questions_wrong().to_string());
     ss.append_plain(" | ");
@@ -103,10 +108,10 @@ fn process_input(event: &Event) -> Option<EventResult> {
                         if Some(action) == chart_action.apply_rules() {
                             game_state.answered_right();
                             game_state
-                                .set_message(Message::correct(format!("Correct: {}", action)));
+                                .set_message(GameMessage::correct(format!("Correct: {}", action)));
                         } else {
                             game_state.answered_wrong();
-                            game_state.set_message(Message::wrong(format!(
+                            game_state.set_message(GameMessage::wrong(format!(
                                 "WRONG: {}",
                                 chart_action
                                     .apply_rules()
@@ -188,7 +193,7 @@ fn main() {
     let mut siv = cursive::default();
     siv.set_theme(create_theme());
 
-    let mut game_state = GameState::new();
+    let mut game_state = FullGameState::new();
     game_state.deal_a_hand();
 
     let shared_game_state = Arc::new(RwLock::new(game_state));

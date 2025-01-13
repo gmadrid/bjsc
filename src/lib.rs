@@ -6,6 +6,6 @@ mod shoe;
 mod strat;
 
 pub use bjerror::*;
-pub use gamestate::{GameState, Message};
+pub use gamestate::GameState;
 pub use hand::Hand;
 pub use strat::Action;
