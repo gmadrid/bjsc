@@ -1,3 +1,6 @@
+use crate::BjError::{UnknownTableType, ValueOutOfRange};
+use crate::{BjError, BjResult};
+use std::fmt::Display;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -10,42 +13,55 @@ pub enum TableType {
 
 impl TableType {
     // TODO: verify these ranges against the strategy tables.
-    pub fn range_check(self, row: u8) -> Result<(), ()> {
+    pub fn range_check(self, row: u8) -> BjResult<()> {
         match self {
             TableType::Hard | TableType::Soft => {
                 if (2u8..=21).contains(&row) {
                     Ok(())
                 } else {
-                    Err(())
+                    Err(BjError::ValueOutOfRange(row, 2, 21))
                 }
             }
             TableType::Split => {
+                // TODO: we need to fix this to use cards, not totals.
                 if (2u8..=21).contains(&row) && row % 2 == 0 {
                     Ok(())
                 } else {
-                    Err(())
+                    Err(ValueOutOfRange(row, 2, 21))
                 }
             }
             TableType::Surrender => {
                 if (2u8..=20).contains(&row) {
                     Ok(())
                 } else {
-                    Err(())
+                    Err(ValueOutOfRange(row, 2, 20))
                 }
             }
         }
     }
 }
 
+impl Display for TableType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            TableType::Hard => "hard",
+            TableType::Soft => "sort",
+            TableType::Split => "split",
+            TableType::Surrender => "surrender",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 impl FromStr for TableType {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    type Err = BjError;
+    fn from_str(s: &str) -> BjResult<Self> {
         match s {
             "hard" => Ok(TableType::Hard),
             "soft" => Ok(TableType::Soft),
             "split" => Ok(TableType::Split),
             "surrender" => Ok(TableType::Surrender),
-            _ => Err(()),
+            _ => Err(UnknownTableType(s.to_string())),
         }
     }
 }

@@ -9,4 +9,6 @@ edition = "2021"
 [dependencies]
 cursive = "0.21.1"
 rand = "0.8.5"
+serde = { version = "1.0.217", features = ["derive"] }
+toml = "0.8.19"
 thiserror = "2.0.11"

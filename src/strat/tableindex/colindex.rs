@@ -1,5 +1,6 @@
 use crate::card::Card;
 use crate::{BjError, BjResult};
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -23,6 +24,12 @@ impl ColIndex {
 
     pub fn value(&self) -> u8 {
         self.0
+    }
+}
+
+impl Display for ColIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

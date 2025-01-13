@@ -1,4 +1,7 @@
 use crate::strat::tableindex::table_type::TableType;
+use crate::BjError::BadRowIndex;
+use crate::{BjError, BjResult};
+use std::fmt::Display;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -8,18 +11,24 @@ pub struct RowIndex {
 }
 
 impl RowIndex {
-    fn new(table_type: TableType, index: u8) -> Result<Self, ()> {
+    fn new(table_type: TableType, index: u8) -> BjResult<Self> {
         table_type.range_check(index)?;
         Ok(RowIndex { table_type, index })
     }
 }
 
-impl FromStr for RowIndex {
-    type Err = ();
+impl Display for RowIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.table_type, self.index)
+    }
+}
 
-    fn from_str(row: &str) -> Result<Self, Self::Err> {
-        let (table_str, index_str) = row.split_once(":").ok_or(())?;
-        RowIndex::new(table_str.parse()?, index_str.parse().map_err(|_| ())?)
+impl FromStr for RowIndex {
+    type Err = BjError;
+
+    fn from_str(row: &str) -> BjResult<Self> {
+        let (table_str, index_str) = row.split_once(":").ok_or(BadRowIndex(row.to_string()))?;
+        RowIndex::new(table_str.parse()?, index_str.parse()?)
     }
 }
 
