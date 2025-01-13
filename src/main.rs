@@ -15,9 +15,12 @@ use std::sync::{Arc, RwLock};
 
 mod game_message;
 
-// TODO: pick better names for these.
-type FullGameState = GameState<GameMessage>;
-type SharedGameState = Arc<RwLock<FullGameState>>;
+#[derive(Debug, Default)]
+struct GameUserData {
+    game_state: GameState,
+    message: GameMessage,
+}
+type SharedUserData = Arc<RwLock<GameUserData>>;
 
 fn create_theme() -> Theme {
     let mut theme = Theme::retro();
@@ -25,12 +28,12 @@ fn create_theme() -> Theme {
     theme
 }
 
-fn make_dealer_hand(gs: &FullGameState) -> impl View {
+fn make_dealer_hand(gs: &GameState) -> impl View {
     let hand = gs.dealer_hand();
     make_hand_view("Dealer", "dealer_hand", hand)
 }
 
-fn make_player_hand(gs: &FullGameState) -> impl View {
+fn make_player_hand(gs: &GameState) -> impl View {
     let hand = gs.player_hand();
     make_hand_view("Player", "player_hand", hand)
 }
@@ -41,8 +44,8 @@ fn make_hand_view(title: &str, view_name: &str, hand: &Hand) -> impl View {
 
 fn update_hands(siv: &mut Cursive) {
     if let Some((dealer_hand_string, player_hand_string)) =
-        siv.with_user_data(|sgs: &mut SharedGameState| {
-            let game_state = sgs.read().unwrap();
+        siv.with_user_data(|sgs: &mut SharedUserData| {
+            let game_state = &sgs.read().unwrap().game_state;
             let dealer_hand_string = make_hand_string(game_state.dealer_hand(), "Dealer");
             let player_hand_string = make_hand_string(game_state.player_hand(), "Player");
             (dealer_hand_string, player_hand_string)
@@ -65,27 +68,24 @@ fn make_hand_string(hand: &Hand, title: &str) -> SpannedString<Style> {
     ss
 }
 
-fn make_score(gs: &FullGameState) -> impl View {
+fn make_score(gs: &GameState) -> impl View {
     let ss = score_string(gs);
 
     TextView::new(ss).with_name("score")
 }
 
 fn update_score(siv: &mut Cursive) {
-    let ss = {
-        // unwrap: it's always there.
-        let shared_game_state: &SharedGameState = siv.user_data().unwrap();
-        // unwrap: poisoned means nothing will work.
-        let game_state = shared_game_state.read().unwrap();
-        score_string(&game_state)
-    };
-
-    siv.call_on_name("score", |view: &mut TextView| {
-        view.set_content(ss);
-    });
+    if let Some(score_string) = siv.with_user_data(|sgs: &mut SharedUserData| {
+        let game_state = &sgs.read().unwrap().game_state;
+        score_string(game_state)
+    }) {
+        siv.call_on_name("score", |view: &mut TextView| {
+            view.set_content(score_string);
+        });
+    }
 }
 
-fn score_string(gs: &FullGameState) -> SpannedString<Style> {
+fn score_string(gs: &GameState) -> SpannedString<Style> {
     let mut ss = SpannedString::styled("Errors: ", Style::title_primary());
     ss.append_plain(gs.num_questions_wrong().to_string());
     ss.append_plain(" | ");
@@ -102,30 +102,30 @@ fn process_input(event: &Event) -> Option<EventResult> {
     if let Event::Char(ch) = event {
         Action::from_key(*ch).map(|action| {
             EventResult::with_cb(move |siv| {
-                siv.with_user_data(|gs: &mut SharedGameState| {
-                    let mut game_state = gs.write().unwrap();
-                    if let Ok(chart_action) = game_state.chart_action() {
+                siv.with_user_data(|gs: &mut SharedUserData| {
+                    let mut user_data = gs.write().unwrap();
+                    if let Ok(chart_action) = user_data.game_state.chart_action() {
                         if Some(action) == chart_action.apply_rules() {
-                            game_state.answered_right();
-                            game_state
-                                .set_message(GameMessage::correct(format!("Correct: {}", action)));
+                            user_data.game_state.answered_right();
+                            user_data.message =
+                                GameMessage::correct(format!("Correct: {}", action));
                         } else {
-                            game_state.answered_wrong();
-                            game_state.set_message(GameMessage::wrong(format!(
+                            user_data.game_state.answered_wrong();
+                            user_data.message = GameMessage::wrong(format!(
                                 "WRONG: {}",
                                 chart_action
                                     .apply_rules()
                                     .map(|r| r.to_string())
                                     .unwrap_or_default()
-                            )));
+                            ));
                         }
-                        if !game_state.deal_a_hand() {
+                        if !user_data.game_state.deal_a_hand() {
                             println!("COULDN'T DEAL A HAND");
                         }
                     } else {
                         println!("NO CHART ACTION");
-                        println!("D: {:?}", game_state.dealer_hand());
-                        println!("P: {:?}", game_state.player_hand());
+                        println!("D: {:?}", user_data.game_state.dealer_hand());
+                        println!("P: {:?}", user_data.game_state.player_hand());
                     }
                 });
                 update_status_message(siv);
@@ -149,17 +149,17 @@ fn make_keymap() -> impl View {
 }
 
 fn create_ui(siv: &mut CursiveRunnable) {
-    if let Some(panel) = siv.with_user_data(|sgs: &mut SharedGameState| {
-        let gs = sgs.read().unwrap();
+    if let Some(panel) = siv.with_user_data(|sgs: &mut SharedUserData| {
+        let gs = &sgs.read().unwrap().game_state;
         OnEventView::new(Panel::new(
             LinearLayout::vertical()
-                .child(make_score(&gs))
+                .child(make_score(gs))
                 .child(DummyView)
                 .child(DummyView)
                 .child(DummyView)
-                .child(make_dealer_hand(&gs))
+                .child(make_dealer_hand(gs))
                 .child(DummyView)
-                .child(make_player_hand(&gs))
+                .child(make_player_hand(gs))
                 .child(make_status_message())
                 .child(make_keymap()),
         ))
@@ -180,10 +180,7 @@ fn make_status_message() -> impl View {
 
 fn update_status_message(siv: &mut Cursive) {
     let message = siv
-        .with_user_data(|gs: &mut SharedGameState| {
-            let game_state = gs.write().unwrap();
-            game_state.message().clone()
-        })
+        .with_user_data(|gs: &mut SharedUserData| gs.read().unwrap().message.clone())
         .unwrap_or_default();
 
     siv.call_on_name("status", |view: &mut TextView| view.set_content(message));
@@ -193,11 +190,10 @@ fn main() {
     let mut siv = cursive::default();
     siv.set_theme(create_theme());
 
-    let mut game_state = FullGameState::new();
-    game_state.deal_a_hand();
+    let mut user_data = GameUserData::default();
+    user_data.game_state.deal_a_hand();
 
-    let shared_game_state = Arc::new(RwLock::new(game_state));
-    siv.set_user_data(shared_game_state);
+    siv.set_user_data(Arc::new(RwLock::new(user_data)));
 
     create_ui(&mut siv);
 

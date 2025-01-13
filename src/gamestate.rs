@@ -6,11 +6,10 @@ use crate::BjResult;
 const NUM_DECKS: usize = 6;
 
 #[derive(Debug)]
-pub struct GameState<Message> {
+pub struct GameState {
     shoe: Shoe,
     player_hand: Hand,
     dealer_hand: Hand,
-    message: Message,
 
     num_questions: usize,
     num_wrong: usize,
@@ -21,7 +20,7 @@ pub enum GameMode {
     Done,
 }
 
-impl<Message: Default> GameState<Message> {
+impl GameState {
     pub fn new() -> Self {
         let mut shoe = Shoe::new(NUM_DECKS);
         shoe.shuffle();
@@ -30,7 +29,6 @@ impl<Message: Default> GameState<Message> {
             shoe,
             player_hand: Default::default(),
             dealer_hand: Default::default(),
-            message: Default::default(),
             num_questions: 0,
             num_wrong: 0,
         }
@@ -51,14 +49,6 @@ impl<Message: Default> GameState<Message> {
     pub fn answered_wrong(&mut self) {
         self.num_wrong += 1;
         self.num_questions += 1;
-    }
-
-    pub fn message(&self) -> &Message {
-        &self.message
-    }
-
-    pub fn set_message(&mut self, message: Message) {
-        self.message = message;
     }
 
     pub fn mode(&self) -> GameMode {
@@ -108,7 +98,7 @@ impl<Message: Default> GameState<Message> {
     }
 }
 
-impl<Message: Default> Default for GameState<Message> {
+impl Default for GameState {
     fn default() -> Self {
         Self::new()
     }
