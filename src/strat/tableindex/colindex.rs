@@ -30,7 +30,7 @@ impl FromStr for ColIndex {
     type Err = BjError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let val: u8 = s.parse().map_err(|e| e)?;
+        let val: u8 = s.parse()?;
         ColIndex::new(val)
     }
 }

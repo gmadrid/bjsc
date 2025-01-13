@@ -90,24 +90,13 @@ fn score_string(gs: &GameState) -> SpannedString<Style> {
 }
 
 fn check_event_input(e: &Event) -> bool {
-    if let Event::Char(ch) = e {
-        match ch {
-            'h' | 's' | 'p' | 'd' => {
-                // we have to store this away, since the event is inexplicably not passed to handler
-                //                game_state.write().unwrap().set_last_input(*ch);
-                true
-            }
-            _ => false,
-        }
-    } else {
-        false
-    }
+    matches!(e, Event::Char('h' | 's' | 'p' | 'd'))
 }
 
 fn process_input(event: &Event) -> Option<EventResult> {
     if let Event::Char(ch) = event {
-        if let Some(action) = Action::from_key(*ch) {
-            Some(EventResult::with_cb(move |siv| {
+        Action::from_key(*ch).map(|action| {
+            EventResult::with_cb(move |siv| {
                 siv.with_user_data(|gs: &mut SharedGameState| {
                     let mut game_state = gs.write().unwrap();
                     if let Ok(chart_action) = game_state.chart_action() {
@@ -137,10 +126,8 @@ fn process_input(event: &Event) -> Option<EventResult> {
                 update_status_message(siv);
                 update_score(siv);
                 update_hands(siv);
-            }))
-        } else {
-            None
-        }
+            })
+        })
     } else {
         None
     }

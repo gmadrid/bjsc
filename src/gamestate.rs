@@ -9,10 +9,12 @@ use cursive::utils::markup::StyledString;
 
 const NUM_DECKS: usize = 6;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub enum Message {
     Correct(String),
     Wrong(String),
+
+    #[default]
     None,
 }
 
@@ -26,15 +28,9 @@ impl Message {
     }
 }
 
-impl Default for Message {
-    fn default() -> Self {
-        Message::None
-    }
-}
-
-impl Into<StyledString> for Message {
-    fn into(self) -> StyledString {
-        match self {
+impl From<Message> for StyledString {
+    fn from(value: Message) -> Self {
+        match value {
             Message::Correct(msg) => StyledString::plain(msg),
             Message::Wrong(msg) => {
                 let style = Style {
