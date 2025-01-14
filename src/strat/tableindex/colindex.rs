@@ -3,6 +3,8 @@ use crate::{BjError, BjResult};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
+// The ColIndex corresponds to a column in the Strategy Chart.
+// It corresponds to the Dealer's up card.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ColIndex(u8);
 

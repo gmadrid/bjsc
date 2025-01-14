@@ -2,13 +2,16 @@ mod colindex;
 mod rowindex;
 mod table_type;
 
-use crate::strat::tableindex::rowindex::RowIndex;
-use crate::{BjError, BjResult};
+use crate::BjError;
 pub use colindex::ColIndex;
+pub use rowindex::RowIndex;
 use std::fmt::Display;
 use std::str::FromStr;
 pub use table_type::TableType;
 
+// The TableIndex refers to a particular cell in the Strategy Tables.
+// It is intended to be an opaque type, but it can be converted to/from a string so that it
+// can be used as a key in a Hashtable that can be serialized.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct TableIndex {
     pub row: RowIndex,
@@ -16,8 +19,8 @@ pub struct TableIndex {
 }
 
 impl TableIndex {
-    fn new(row: RowIndex, col: ColIndex) -> BjResult<TableIndex> {
-        Ok(TableIndex { row, col })
+    fn new(row: RowIndex, col: ColIndex) -> TableIndex {
+        TableIndex { row, col }
     }
 
     pub fn table_type(&self) -> TableType {
@@ -31,6 +34,10 @@ impl TableIndex {
     pub fn col_index(&self) -> ColIndex {
         self.col
     }
+}
+
+pub fn new_table_index(row: RowIndex, col: ColIndex) -> TableIndex {
+    TableIndex::new(row, col)
 }
 
 impl Display for TableIndex {
@@ -47,7 +54,7 @@ impl FromStr for TableIndex {
             .ok_or(BjError::BadTableIndex(s.to_string()))?;
         let row = RowIndex::from_str(row_str.trim())?;
         let col = ColIndex::from_str(col_str.trim())?;
-        TableIndex::new(row, col)
+        Ok(TableIndex::new(row, col))
     }
 }
 

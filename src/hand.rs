@@ -1,4 +1,6 @@
 use crate::card::{Card, Pip};
+use crate::{BjError, BjResult};
+use std::str::FromStr;
 
 #[derive(Debug, Default)]
 pub struct Hand {
@@ -55,6 +57,23 @@ impl Hand {
 
         self.total = hard_total;
         self.soft = num_aces > 0;
+    }
+}
+
+impl FromStr for Hand {
+    type Err = BjError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let cards: Vec<Card> = s
+            .split_whitespace()
+            .map(|s| s.parse())
+            .collect::<BjResult<Vec<Card>>>()?;
+        let mut hand = Hand {
+            cards,
+            ..Default::default()
+        };
+        hand.compute_total();
+        Ok(hand)
     }
 }
 

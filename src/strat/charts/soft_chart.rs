@@ -1,6 +1,7 @@
 use crate::strat::charts::ChartAction::{DblH, DblS, Hit_, Stnd};
 use crate::strat::charts::{as_chart_column, Chart, ChartAction};
-use crate::strat::tableindex::ColIndex;
+use crate::strat::tableindex::TableType::Soft;
+use crate::strat::tableindex::{new_table_index, ColIndex, RowIndex, TableIndex};
 use crate::strat::ChartAction::NoAc;
 use crate::{BjError, BjResult, Hand};
 
@@ -29,9 +30,12 @@ const SOFT_CHART: [[ChartAction; 10]; 9] = [
 pub struct SoftChart;
 
 impl Chart for SoftChart {
-    fn lookup_action(player_hand: &Hand, dealer_hand: &Hand) -> BjResult<ChartAction> {
+    fn lookup_action(
+        player_hand: &Hand,
+        dealer_hand: &Hand,
+    ) -> BjResult<(ChartAction, Option<TableIndex>)> {
         if !player_hand.is_soft() {
-            return Ok(NoAc);
+            return Ok((NoAc, None));
         }
 
         let dealer_card = dealer_hand.first_card().ok_or(BjError::MissingDealerCard)?;
@@ -44,7 +48,11 @@ impl Chart for SoftChart {
 
         let col_index = ColIndex::new_with_card(dealer_card)?;
         let chart_index = as_chart_column(col_index);
-        Ok(SOFT_CHART[(total - 13) as usize][chart_index])
+        let row_index = RowIndex::new(Soft, total)?;
+        Ok((
+            SOFT_CHART[(total - 13) as usize][chart_index],
+            Some(new_table_index(row_index, col_index)),
+        ))
     }
 }
 

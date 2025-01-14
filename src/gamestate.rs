@@ -60,7 +60,8 @@ impl GameState {
     }
 
     pub fn chart_action(&self) -> BjResult<ChartAction> {
-        lookup_action(&self.player_hand, &self.dealer_hand)
+        let (chart_action, _) = lookup_action(&self.player_hand, &self.dealer_hand)?;
+        Ok(chart_action)
     }
 
     pub fn dealer_hand(&self) -> &Hand {

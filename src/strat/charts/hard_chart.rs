@@ -1,6 +1,6 @@
 use crate::strat::charts::ChartAction::{DblH, Hit_, Stnd};
 use crate::strat::charts::{as_chart_column, Chart, ChartAction};
-use crate::strat::tableindex::ColIndex;
+use crate::strat::tableindex::{new_table_index, ColIndex, RowIndex, TableIndex, TableType};
 use crate::{BjError, BjResult, Hand};
 
 // Standard Basic Strategy Hard Totals from BJA
@@ -30,18 +30,33 @@ const HARD_CHART: [[ChartAction; 10]; 10] = [
 pub struct HardChart;
 
 impl Chart for HardChart {
-    fn lookup_action(player_hand: &Hand, dealer_hand: &Hand) -> BjResult<ChartAction> {
+    fn lookup_action(
+        player_hand: &Hand,
+        dealer_hand: &Hand,
+    ) -> BjResult<(ChartAction, Option<TableIndex>)> {
         let dealer_card = dealer_hand.first_card().ok_or(BjError::MissingDealerCard)?;
         let total = player_hand.total();
         let col_index = ColIndex::new_with_card(dealer_card)?;
         let chart_index = as_chart_column(col_index);
 
         if total <= 8 {
-            Ok(HARD_CHART[0][chart_index])
+            let row_index = RowIndex::new(TableType::Hard, 8)?;
+            Ok((
+                HARD_CHART[0][chart_index],
+                Some(new_table_index(row_index, col_index)),
+            ))
         } else if total >= 17 {
-            Ok(HARD_CHART[9][chart_index])
+            let row_index = RowIndex::new(TableType::Hard, 17)?;
+            Ok((
+                HARD_CHART[9][chart_index],
+                Some(new_table_index(row_index, col_index)),
+            ))
         } else {
-            Ok(HARD_CHART[(total - 8) as usize][chart_index])
+            let row_index = RowIndex::new(TableType::Hard, total)?;
+            Ok((
+                HARD_CHART[(total - 8) as usize][chart_index],
+                Some(new_table_index(row_index, col_index)),
+            ))
         }
     }
 }

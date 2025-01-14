@@ -23,11 +23,10 @@ impl TableType {
                 }
             }
             TableType::Split => {
-                // TODO: we need to fix this to use cards, not totals.
-                if (2u8..=21).contains(&row) && row % 2 == 0 {
+                if (1u8..=10).contains(&row) {
                     Ok(())
                 } else {
-                    Err(ValueOutOfRange(row, 2, 21))
+                    Err(ValueOutOfRange(row, 1, 10))
                 }
             }
             TableType::Surrender => {
@@ -103,11 +102,12 @@ mod test {
     #[test]
     fn test_split_range_check() {
         assert!(TableType::Split.range_check(0).is_err());
-        assert!(TableType::Split.range_check(1).is_err());
+        assert!(TableType::Split.range_check(1).is_ok());
         assert!(TableType::Split.range_check(2).is_ok());
+        assert!(TableType::Split.range_check(7).is_ok());
         assert!(TableType::Split.range_check(10).is_ok());
         assert!(TableType::Split.range_check(11).is_err());
-        assert!(TableType::Split.range_check(20).is_ok());
+        assert!(TableType::Split.range_check(20).is_err());
         assert!(TableType::Split.range_check(21).is_err());
         assert!(TableType::Split.range_check(22).is_err());
     }

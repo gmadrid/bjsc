@@ -1,3 +1,5 @@
+use crate::BjError::{BadPipValue, BadSuitValue, ValueOutOfRange};
+use crate::{BjError, BjResult};
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -14,9 +16,9 @@ impl Card {
 }
 
 impl TryFrom<u8> for Card {
-    type Error = ();
+    type Error = BjError;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> BjResult<Self> {
         let pip = (value % 13).try_into()?;
         let suit = (value / 13).try_into()?;
         Ok(Card { pip, suit })
@@ -30,7 +32,7 @@ impl Display for Card {
 }
 
 impl FromStr for Card {
-    type Err = ();
+    type Err = BjError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let trimmed = s.trim();
@@ -78,7 +80,7 @@ impl Pip {
 }
 
 impl TryFrom<u8> for Pip {
-    type Error = ();
+    type Error = BjError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -95,7 +97,7 @@ impl TryFrom<u8> for Pip {
             10 => Ok(Pip::Jack),
             11 => Ok(Pip::Queen),
             12 => Ok(Pip::King),
-            _ => Err(()),
+            _ => Err(ValueOutOfRange(value, 0, 12)),
         }
     }
 }
@@ -122,7 +124,7 @@ impl Display for Pip {
 }
 
 impl FromStr for Pip {
-    type Err = ();
+    type Err = BjError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -139,7 +141,7 @@ impl FromStr for Pip {
             "J" => Ok(Pip::Jack),
             "Q" => Ok(Pip::Queen),
             "K" => Ok(Pip::King),
-            _ => Err(()),
+            _ => Err(BadPipValue(s.to_string())),
         }
     }
 }
@@ -153,7 +155,7 @@ pub enum Suit {
 }
 
 impl TryFrom<u8> for Suit {
-    type Error = ();
+    type Error = BjError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -161,7 +163,7 @@ impl TryFrom<u8> for Suit {
             1 => Ok(Suit::Hearts),
             2 => Ok(Suit::Diamonds),
             3 => Ok(Suit::Clubs),
-            _ => Err(()),
+            _ => Err(ValueOutOfRange(value, 0, 3)),
         }
     }
 }
@@ -179,14 +181,14 @@ impl Display for Suit {
 }
 
 impl FromStr for Suit {
-    type Err = ();
+    type Err = BjError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "S" | "s" => Ok(Suit::Spades),
             "H" | "h" => Ok(Suit::Hearts),
             "D" | "d" => Ok(Suit::Diamonds),
             "C" | "c" => Ok(Suit::Clubs),
-            _ => Err(()),
+            _ => Err(BadSuitValue(s.to_string())),
         }
     }
 }

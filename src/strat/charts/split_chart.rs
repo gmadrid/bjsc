@@ -1,9 +1,16 @@
 use crate::strat::charts::ChartAction::{NoAc, SDas, Splt};
 use crate::strat::charts::{as_chart_column, Chart, ChartAction};
-use crate::strat::tableindex::ColIndex;
+use crate::strat::tableindex::TableType::Split;
+use crate::strat::tableindex::{new_table_index, ColIndex, RowIndex, TableIndex};
 use crate::{BjError, BjResult, Hand};
 
 // Standard Basic Strategy Pair Splitting from BJA
+//
+// Col Index: all tables are indexed by dealer card _value_: 2-T, A.
+// The Row Index for the Split Chart is interpreted as the Card in the Split: A-T.
+// Note that the rows are _not_ zero-indexed.
+// Note that the Row and Col indices are in a different order.
+// Our code is the same as the layout of the Chart on the BJA site.
 const SPLIT_CHART: [[ChartAction; 10]; 10] = [
     /*  2 (A, A) */
     [Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt],
@@ -30,10 +37,13 @@ const SPLIT_CHART: [[ChartAction; 10]; 10] = [
 pub struct SplitChart;
 
 impl Chart for SplitChart {
-    fn lookup_action(player_hand: &Hand, dealer_hand: &Hand) -> BjResult<ChartAction> {
+    fn lookup_action(
+        player_hand: &Hand,
+        dealer_hand: &Hand,
+    ) -> BjResult<(ChartAction, Option<TableIndex>)> {
         let dealer_card = dealer_hand.first_card().ok_or(BjError::MissingDealerCard)?;
         if !player_hand.splittable() {
-            return Ok(NoAc);
+            return Ok((NoAc, None));
         }
 
         // `splittable()` checks that the two player cards are the same.
@@ -47,7 +57,10 @@ impl Chart for SplitChart {
             .map(|v| if v == 11 { 1 } else { v })
             .unwrap();
 
-        Ok(SPLIT_CHART[(row - 1) as usize][chart_index])
+        let row_index = RowIndex::new(Split, row)?;
+        let table_index = new_table_index(row_index, col_index);
+        let chart_action = SPLIT_CHART[(row - 1) as usize][chart_index];
+        Ok((chart_action, Some(table_index)))
     }
 }
 

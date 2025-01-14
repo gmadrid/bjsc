@@ -4,6 +4,10 @@ use crate::{BjError, BjResult};
 use std::fmt::Display;
 use std::str::FromStr;
 
+// The RowIndex corresponds to a row in a Strategy Chart.
+// In indicates both the name of the table and the row in the chart.
+// The row number is interpreted differently for each table.
+// See the Table in question for details.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct RowIndex {
     pub table_type: TableType,
@@ -11,7 +15,7 @@ pub struct RowIndex {
 }
 
 impl RowIndex {
-    fn new(table_type: TableType, index: u8) -> BjResult<Self> {
+    pub fn new(table_type: TableType, index: u8) -> BjResult<Self> {
         table_type.range_check(index)?;
         Ok(RowIndex { table_type, index })
     }

@@ -7,8 +7,16 @@ pub enum BjError {
 
     #[error("Col index couldn't be parsed, '{0}'.")]
     BadColIndex(String),
+
+    #[error("An unexpected value, '{0}', was found parsing a Pip.")]
+    BadPipValue(String),
+
     #[error("Row index couldn't be parsed, '{0}'.")]
     BadRowIndex(String),
+
+    #[error("An unexpected value, '{0}', was found parsing a Suit.")]
+    BadSuitValue(String),
+
     #[error("Table index couldn't be parsed, '{0}'.")]
     BadTableIndex(String),
 
