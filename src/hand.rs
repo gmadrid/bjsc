@@ -1,5 +1,7 @@
 use crate::card::{Card, Pip};
 use crate::{BjError, BjResult};
+use itertools::Itertools;
+use std::fmt::Display;
 use std::str::FromStr;
 
 #[derive(Debug, Default)]
@@ -57,6 +59,13 @@ impl Hand {
 
         self.total = hard_total;
         self.soft = num_aces > 0;
+    }
+}
+
+impl Display for Hand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let hand_str = self.cards.iter().join(" ");
+        write!(f, "{}", hand_str)
     }
 }
 

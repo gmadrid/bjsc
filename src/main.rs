@@ -2,14 +2,15 @@ use crate::game_message::GameMessage;
 use bjsc::{Action, GameState, Hand};
 use cursive::align::{HAlign, VAlign};
 use cursive::event::{Event, EventResult};
-use cursive::style::BaseColor::Blue;
+use cursive::style::BaseColor::{Blue, Red, White};
 use cursive::style::PaletteColor::TitlePrimary;
-use cursive::style::Style;
+use cursive::style::{ColorStyle, Style};
 use cursive::theme::Color::Dark;
 use cursive::theme::Theme;
 use cursive::traits::{Nameable, Resizable};
 use cursive::utils::span::SpannedString;
-use cursive::views::{DummyView, LinearLayout, OnEventView, Panel, TextView};
+use cursive::view::{Margins, Scrollable};
+use cursive::views::{DummyView, LinearLayout, OnEventView, PaddedView, Panel, TextView};
 use cursive::{Cursive, CursiveRunnable, View};
 use std::sync::{Arc, RwLock};
 
@@ -71,7 +72,12 @@ fn make_hand_string(hand: &Hand, title: &str) -> SpannedString<Style> {
 fn make_score(gs: &GameState) -> impl View {
     let ss = score_string(gs);
 
-    TextView::new(ss).with_name("score")
+    Panel::new(PaddedView::new(
+        Margins::lrtb(1, 1, 1, 1),
+        LinearLayout::vertical().child(TextView::new(ss).with_name("score")),
+    ))
+    .title("Stats")
+    .title_position(HAlign::Left)
 }
 
 fn update_score(siv: &mut Cursive) {
@@ -102,10 +108,12 @@ fn process_input(event: &Event) -> Option<EventResult> {
     if let Event::Char(ch) = event {
         Action::from_key(*ch).map(|action| {
             EventResult::with_cb(move |siv| {
+                let mut log: Option<String> = None;
                 siv.with_user_data(|gs: &mut SharedUserData| {
                     let mut user_data = gs.write().unwrap();
                     if let Ok(chart_action) = user_data.game_state.chart_action() {
-                        if Some(action) == chart_action.apply_rules() {
+                        let action_from_rules = chart_action.apply_rules();
+                        if Some(action) == action_from_rules {
                             user_data.game_state.answered_right();
                             user_data.message =
                                 GameMessage::correct(format!("Correct: {}", action));
@@ -113,11 +121,18 @@ fn process_input(event: &Event) -> Option<EventResult> {
                             user_data.game_state.answered_wrong();
                             user_data.message = GameMessage::wrong(format!(
                                 "WRONG: {}",
-                                chart_action
-                                    .apply_rules()
-                                    .map(|r| r.to_string())
-                                    .unwrap_or_default()
+                                action_from_rules.map(|r| r.to_string()).unwrap_or_default()
                             ));
+
+                            if let Some(correct_action) = action_from_rules {
+                                log = Some(format!(
+                                    "Player: {}, Dealer: {}, Correct: {}, Guess: {}",
+                                    user_data.game_state.player_hand(),
+                                    user_data.game_state.dealer_hand(),
+                                    correct_action,
+                                    action
+                                ));
+                            }
                         }
                         if !user_data.game_state.deal_a_hand() {
                             println!("COULDN'T DEAL A HAND");
@@ -128,6 +143,9 @@ fn process_input(event: &Event) -> Option<EventResult> {
                         println!("P: {:?}", user_data.game_state.player_hand());
                     }
                 });
+                if let Some(log) = log {
+                    add_log(siv, log);
+                }
                 update_status_message(siv);
                 update_score(siv);
                 update_hands(siv);
@@ -144,8 +162,33 @@ fn make_keymap() -> impl View {
         TextView::new("(H)it | (S)tand | (D)ouble | S(P)lit")
             .h_align(HAlign::Center)
             .v_align(VAlign::Bottom)
+            .full_width(), //            .full_screen(),
+    )
+}
+
+fn make_log() -> impl View {
+    Panel::new(
+        LinearLayout::vertical()
+            .with_name("log")
+            .scrollable()
+            .scroll_y(true)
             .full_screen(),
     )
+    .title("Mistakes")
+    .title_position(HAlign::Left)
+}
+
+fn add_log(siv: &mut Cursive, log: String) {
+    let style = Style {
+        effects: Default::default(),
+        color: ColorStyle::new(White, Red.dark()),
+    };
+    let mut styled = SpannedString::styled("Error:", style);
+    styled.append_plain(" ");
+    styled.append_plain(log);
+    siv.call_on_name("log", |view: &mut LinearLayout| {
+        view.insert_child(0, TextView::new(styled));
+    });
 }
 
 fn create_ui(siv: &mut CursiveRunnable) {
@@ -160,7 +203,11 @@ fn create_ui(siv: &mut CursiveRunnable) {
                 .child(make_dealer_hand(gs))
                 .child(DummyView)
                 .child(make_player_hand(gs))
+                .child(DummyView)
                 .child(make_status_message())
+                .child(DummyView)
+                .child(make_log())
+                .child(DummyView)
                 .child(make_keymap()),
         ))
         .on_event_inner(check_event_input, |_, e| process_input(e))
@@ -175,7 +222,7 @@ fn make_status_message() -> impl View {
         .h_align(HAlign::Left)
         .v_align(VAlign::Center)
         .with_name("status")
-        .full_screen()
+        .full_width()
 }
 
 fn update_status_message(siv: &mut Cursive) {
