@@ -1,6 +1,6 @@
 use crate::hand::Hand;
 use crate::shoe::Shoe;
-use crate::strat::{lookup_action, ChartAction};
+use crate::strat::{lookup_action, ChartAction, TableIndex};
 use crate::BjResult;
 
 const NUM_DECKS: usize = 6;
@@ -59,9 +59,8 @@ impl GameState {
         }
     }
 
-    pub fn chart_action(&self) -> BjResult<ChartAction> {
-        let (chart_action, _) = lookup_action(&self.player_hand, &self.dealer_hand)?;
-        Ok(chart_action)
+    pub fn chart_action(&self) -> BjResult<(ChartAction, Option<TableIndex>)> {
+        lookup_action(&self.player_hand, &self.dealer_hand)
     }
 
     pub fn dealer_hand(&self) -> &Hand {

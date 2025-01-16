@@ -8,6 +8,7 @@ use cursive::style::{ColorStyle, Style};
 use cursive::theme::Color::Dark;
 use cursive::theme::Theme;
 use cursive::traits::{Nameable, Resizable};
+use cursive::utils::markup::StyledString;
 use cursive::utils::span::SpannedString;
 use cursive::view::{Margins, Scrollable};
 use cursive::views::{DummyView, LinearLayout, OnEventView, PaddedView, Panel, TextView};
@@ -69,21 +70,63 @@ fn make_hand_string(hand: &Hand, title: &str) -> SpannedString<Style> {
     ss
 }
 
-fn make_score(gs: &GameState) -> impl View {
-    let ss = score_string(gs);
+fn numbers_string(num: usize, wrong: usize) -> String {
+    let pct = (num - wrong) as f64 / num as f64 * 100.0;
+    format!("{} / {} ({:.1}%)", num - wrong, num, pct)
+}
 
-    Panel::new(PaddedView::new(
-        Margins::lrtb(1, 1, 1, 1),
-        LinearLayout::vertical().child(TextView::new(ss).with_name("score")),
-    ))
-    .title("Stats")
-    .title_position(HAlign::Left)
+fn make_score(gs: &GameState) -> impl View {
+    let ss = numbers_string(gs.num_questions_asked(), gs.num_questions_wrong());
+
+    let hands = labelled("Hands:", Some(ss), Some("score"));
+    let hard = labelled("Hard:", None::<&str>, Some("hard"));
+    let soft = labelled("Soft:", None::<&str>, Some("soft"));
+    let split = labelled("Split:", None::<&str>, Some("split"));
+    let double = labelled("Double:", None::<&str>, Some("double"));
+
+    let top = hands.full_width();
+    let left = LinearLayout::vertical()
+        .child(hard)
+        .child(soft)
+        .full_width();
+    let right = LinearLayout::vertical()
+        .child(split)
+        .child(double)
+        .full_width();
+    let bottom = LinearLayout::horizontal().child(left).child(right);
+
+    let full = LinearLayout::vertical().child(top).child(bottom);
+
+    Panel::new(PaddedView::new(Margins::lrtb(1, 1, 1, 1), full))
+        .title("Stats")
+        .title_position(HAlign::Left)
+        .full_width()
+}
+
+fn labelled(
+    label: impl Into<StyledString>,
+    content: Option<impl Into<StyledString>>,
+    name: Option<impl Into<String>>,
+) -> impl View {
+    let label = PaddedView::lrtb(0, 1, 0, 0, TextView::new(label));
+    let content_inner = TextView::new(content.map(|c| c.into()).unwrap_or_default());
+
+    let mut horiz = LinearLayout::horizontal().child(label);
+    if let Some(name) = name {
+        horiz.add_child(content_inner.with_name(name));
+    } else {
+        horiz.add_child(content_inner);
+    }
+    horiz
 }
 
 fn update_score(siv: &mut Cursive) {
     if let Some(score_string) = siv.with_user_data(|sgs: &mut SharedUserData| {
         let game_state = &sgs.read().unwrap().game_state;
-        score_string(game_state)
+        numbers_string(
+            game_state.num_questions_asked(),
+            game_state.num_questions_wrong(),
+        )
     }) {
         siv.call_on_name("score", |view: &mut TextView| {
             view.set_content(score_string);
@@ -91,15 +134,15 @@ fn update_score(siv: &mut Cursive) {
     }
 }
 
-fn score_string(gs: &GameState) -> SpannedString<Style> {
-    let mut ss = SpannedString::styled("Errors: ", Style::title_primary());
-    ss.append_plain(gs.num_questions_wrong().to_string());
-    ss.append_plain(" | ");
-    ss.append_styled("Hands seen: ", Style::title_primary());
-    ss.append_plain(gs.num_questions_asked().to_string());
-    ss
-}
-
+// fn score_string(gs: &GameState) -> SpannedString<Style> {
+//     let mut ss = SpannedString::styled("Errors: ", Style::title_primary());
+//     ss.append_plain(gs.num_questions_wrong().to_string());
+//     ss.append_plain(" | ");
+//     ss.append_styled("Hands seen: ", Style::title_primary());
+//     ss.append_plain(gs.num_questions_asked().to_string());
+//     ss
+// }
+//
 fn check_event_input(e: &Event) -> bool {
     matches!(e, Event::Char('h' | 's' | 'p' | 'd'))
 }
@@ -109,40 +152,7 @@ fn process_input(event: &Event) -> Option<EventResult> {
         Action::from_key(*ch).map(|action| {
             EventResult::with_cb(move |siv| {
                 let mut log: Option<String> = None;
-                siv.with_user_data(|gs: &mut SharedUserData| {
-                    let mut user_data = gs.write().unwrap();
-                    if let Ok(chart_action) = user_data.game_state.chart_action() {
-                        let action_from_rules = chart_action.apply_rules();
-                        if Some(action) == action_from_rules {
-                            user_data.game_state.answered_right();
-                            user_data.message =
-                                GameMessage::correct(format!("Correct: {}", action));
-                        } else {
-                            user_data.game_state.answered_wrong();
-                            user_data.message = GameMessage::wrong(format!(
-                                "WRONG: {}",
-                                action_from_rules.map(|r| r.to_string()).unwrap_or_default()
-                            ));
-
-                            if let Some(correct_action) = action_from_rules {
-                                log = Some(format!(
-                                    "Player: {}, Dealer: {}, Correct: {}, Guess: {}",
-                                    user_data.game_state.player_hand(),
-                                    user_data.game_state.dealer_hand(),
-                                    correct_action,
-                                    action
-                                ));
-                            }
-                        }
-                        if !user_data.game_state.deal_a_hand() {
-                            println!("COULDN'T DEAL A HAND");
-                        }
-                    } else {
-                        println!("NO CHART ACTION");
-                        println!("D: {:?}", user_data.game_state.dealer_hand());
-                        println!("P: {:?}", user_data.game_state.player_hand());
-                    }
-                });
+                process_input_inner(action, siv, &mut log);
                 if let Some(log) = log {
                     add_log(siv, log);
                 }
@@ -154,6 +164,42 @@ fn process_input(event: &Event) -> Option<EventResult> {
     } else {
         None
     }
+}
+
+fn process_input_inner(action: Action, siv: &mut Cursive, log: &mut Option<String>) {
+    siv.with_user_data(|gs: &mut SharedUserData| {
+        let mut user_data = gs.write().unwrap();
+        if let Ok((chart_action, _)) = user_data.game_state.chart_action() {
+            let action_from_rules = chart_action.apply_rules();
+            if Some(action) == action_from_rules {
+                user_data.game_state.answered_right();
+                user_data.message = GameMessage::correct(format!("Correct: {}", action));
+            } else {
+                user_data.game_state.answered_wrong();
+                user_data.message = GameMessage::wrong(format!(
+                    "WRONG: {}",
+                    action_from_rules.map(|r| r.to_string()).unwrap_or_default()
+                ));
+
+                if let Some(correct_action) = action_from_rules {
+                    let _ = log.insert(format!(
+                        "Player: {}, Dealer: {}, Correct: {}, Guess: {}",
+                        user_data.game_state.player_hand(),
+                        user_data.game_state.dealer_hand(),
+                        correct_action,
+                        action
+                    ));
+                }
+            }
+            if !user_data.game_state.deal_a_hand() {
+                println!("COULDN'T DEAL A HAND");
+            }
+        } else {
+            println!("NO CHART ACTION");
+            println!("D: {:?}", user_data.game_state.dealer_hand());
+            println!("P: {:?}", user_data.game_state.player_hand());
+        }
+    });
 }
 
 fn make_keymap() -> impl View {
