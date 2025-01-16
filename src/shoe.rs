@@ -32,6 +32,7 @@ impl Shoe {
 
     pub fn shuffle(&mut self) {
         self.cards.shuffle(&mut thread_rng());
+        self.next = 0;
     }
 
     pub fn is_done(&self) -> bool {

@@ -76,6 +76,10 @@ impl GameState {
         self.player_hand = Default::default();
     }
 
+    pub fn shuffle(&mut self) {
+        self.shoe.shuffle();
+    }
+
     // Returns false if the shoe is done.
     pub fn deal_a_hand(&mut self) -> bool {
         if self.shoe.is_done() {

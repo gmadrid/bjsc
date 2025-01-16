@@ -11,7 +11,7 @@ use cursive::traits::{Nameable, Resizable};
 use cursive::utils::markup::StyledString;
 use cursive::utils::span::SpannedString;
 use cursive::view::{Margins, Scrollable};
-use cursive::views::{DummyView, LinearLayout, OnEventView, PaddedView, Panel, TextView};
+use cursive::views::{Dialog, DummyView, LinearLayout, OnEventView, PaddedView, Panel, TextView};
 use cursive::{Cursive, CursiveRunnable, View};
 use std::sync::{Arc, RwLock};
 
@@ -152,9 +152,13 @@ fn process_input(event: &Event) -> Option<EventResult> {
         Action::from_key(*ch).map(|action| {
             EventResult::with_cb(move |siv| {
                 let mut log: Option<String> = None;
-                process_input_inner(action, siv, &mut log);
+                let mut dialog: Option<Dialog> = None;
+                process_input_inner(action, siv, &mut log, &mut dialog);
                 if let Some(log) = log {
                     add_log(siv, log);
+                }
+                if let Some(dialog) = dialog {
+                    siv.add_layer(dialog);
                 }
                 update_status_message(siv);
                 update_score(siv);
@@ -166,7 +170,12 @@ fn process_input(event: &Event) -> Option<EventResult> {
     }
 }
 
-fn process_input_inner(action: Action, siv: &mut Cursive, log: &mut Option<String>) {
+fn process_input_inner(
+    action: Action,
+    siv: &mut Cursive,
+    log: &mut Option<String>,
+    dialog: &mut Option<Dialog>,
+) {
     siv.with_user_data(|gs: &mut SharedUserData| {
         let mut user_data = gs.write().unwrap();
         if let Ok((chart_action, _)) = user_data.game_state.chart_action() {
@@ -192,7 +201,19 @@ fn process_input_inner(action: Action, siv: &mut Cursive, log: &mut Option<Strin
                 }
             }
             if !user_data.game_state.deal_a_hand() {
-                println!("COULDN'T DEAL A HAND");
+                *dialog = Some(
+                    Dialog::new()
+                        .content(TextView::new("Shuffling a new shoe."))
+                        .button("Shuffle", |s| {
+                            s.with_user_data(|gs: &mut SharedUserData| {
+                                let mut user_data = gs.write().unwrap();
+                                user_data.game_state.shuffle();
+                                user_data.game_state.deal_a_hand();
+                            });
+                            update_hands(s);
+                            s.pop_layer();
+                        }),
+                );
             }
         } else {
             println!("NO CHART ACTION");
