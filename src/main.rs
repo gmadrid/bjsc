@@ -1,326 +1,249 @@
-use crate::game_message::GameMessage;
-use bjsc::{phrase_for_row, Action, GameState, Hand};
-use cursive::align::{HAlign, VAlign};
-use cursive::event::{Event, EventResult};
-use cursive::style::BaseColor::{Blue, Red, White};
-use cursive::style::PaletteColor::TitlePrimary;
-use cursive::style::{ColorStyle, Style};
-use cursive::theme::Color::Dark;
-use cursive::theme::Theme;
-use cursive::traits::{Nameable, Resizable};
-use cursive::utils::markup::StyledString;
-use cursive::utils::span::SpannedString;
-use cursive::view::{Margins, Scrollable};
-use cursive::views::{Dialog, DummyView, LinearLayout, OnEventView, PaddedView, Panel, TextView};
-use cursive::{Cursive, CursiveRunnable, View};
-use std::sync::{Arc, RwLock};
+use bjsc::{phrase_for_row, Action, GameState};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::execute;
+use ratatui::backend::CrosstermBackend;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::Terminal;
+use std::io;
 
-mod game_message;
+#[derive(Debug, Clone)]
+enum StatusMessage {
+    Correct(String),
+    Wrong(String),
+    None,
+}
 
-#[derive(Debug, Default)]
-struct GameUserData {
+struct App {
     game_state: GameState,
-    message: GameMessage,
-}
-type SharedUserData = Arc<RwLock<GameUserData>>;
-
-fn create_theme() -> Theme {
-    let mut theme = Theme::retro();
-    theme.palette[TitlePrimary] = Dark(Blue);
-    theme
+    status: StatusMessage,
+    error_log: Vec<String>,
+    show_shuffle_prompt: bool,
 }
 
-fn make_dealer_hand(gs: &GameState) -> impl View {
-    let hand = gs.dealer_hand();
-    make_hand_view("Dealer", "dealer_hand", hand)
-}
-
-fn make_player_hand(gs: &GameState) -> impl View {
-    let hand = gs.player_hand();
-    make_hand_view("Player", "player_hand", hand)
-}
-
-fn make_hand_view(title: &str, view_name: &str, hand: &Hand) -> impl View {
-    TextView::new(make_hand_string(hand, title)).with_name(view_name)
-}
-
-fn update_hands(siv: &mut Cursive) {
-    if let Some((dealer_hand_string, player_hand_string)) =
-        siv.with_user_data(|sgs: &mut SharedUserData| {
-            let game_state = &sgs.read().unwrap().game_state;
-            let dealer_hand_string = make_hand_string(game_state.dealer_hand(), "Dealer");
-            let player_hand_string = make_hand_string(game_state.player_hand(), "Player");
-            (dealer_hand_string, player_hand_string)
-        })
-    {
-        siv.call_on_name("dealer_hand", |view: &mut TextView| {
-            view.set_content(dealer_hand_string)
-        });
-        siv.call_on_name("player_hand", |view: &mut TextView| {
-            view.set_content(player_hand_string)
-        });
+impl App {
+    fn new() -> Self {
+        let mut game_state = GameState::default();
+        game_state.deal_a_hand();
+        App {
+            game_state,
+            status: StatusMessage::None,
+            error_log: Vec::new(),
+            show_shuffle_prompt: false,
+        }
     }
-}
 
-fn make_hand_string(hand: &Hand, title: &str) -> SpannedString<Style> {
-    let mut ss = SpannedString::styled(format!("{}: ", title), Style::title_primary());
-    for card in hand.cards() {
-        ss.append_plain(format!("{} ", card));
-    }
-    ss
-}
+    fn handle_key(&mut self, code: KeyCode) {
+        if self.show_shuffle_prompt {
+            if code == KeyCode::Enter || code == KeyCode::Char(' ') {
+                self.game_state.shuffle();
+                self.game_state.deal_a_hand();
+                self.show_shuffle_prompt = false;
+            }
+            return;
+        }
 
-fn numbers_string(num: usize, wrong: usize) -> String {
-    let pct = (num - wrong) as f64 / num as f64 * 100.0;
-    format!("{} / {} ({:.1}%)", num - wrong, num, pct)
-}
+        let action = match code {
+            KeyCode::Char(ch) => Action::from_key(ch),
+            _ => None,
+        };
 
-fn make_score(gs: &GameState) -> impl View {
-    let ss = numbers_string(gs.num_questions_asked(), gs.num_questions_wrong());
+        let Some(action) = action else { return };
 
-    let hands = labelled("Hands:", Some(ss), Some("score"));
-    let hard = labelled("Hard:", None::<&str>, Some("hard"));
-    let soft = labelled("Soft:", None::<&str>, Some("soft"));
-    let split = labelled("Split:", None::<&str>, Some("split"));
-    let double = labelled("Double:", None::<&str>, Some("double"));
-
-    let top = hands.full_width();
-    let left = LinearLayout::vertical()
-        .child(hard)
-        .child(soft)
-        .full_width();
-    let right = LinearLayout::vertical()
-        .child(split)
-        .child(double)
-        .full_width();
-    let bottom = LinearLayout::horizontal().child(left).child(right);
-
-    let full = LinearLayout::vertical().child(top).child(bottom);
-
-    Panel::new(PaddedView::new(Margins::lrtb(1, 1, 1, 1), full))
-        .title("Stats")
-        .title_position(HAlign::Left)
-        .full_width()
-}
-
-fn labelled(
-    label: impl Into<StyledString>,
-    content: Option<impl Into<StyledString>>,
-    name: Option<impl Into<String>>,
-) -> impl View {
-    let label = PaddedView::lrtb(0, 1, 0, 0, TextView::new(label));
-    let content_inner = TextView::new(content.map(|c| c.into()).unwrap_or_default());
-
-    let mut horiz = LinearLayout::horizontal().child(label);
-    if let Some(name) = name {
-        horiz.add_child(content_inner.with_name(name));
-    } else {
-        horiz.add_child(content_inner);
-    }
-    horiz
-}
-
-fn update_score(siv: &mut Cursive) {
-    if let Some(score_string) = siv.with_user_data(|sgs: &mut SharedUserData| {
-        let game_state = &sgs.read().unwrap().game_state;
-        numbers_string(
-            game_state.num_questions_asked(),
-            game_state.num_questions_wrong(),
-        )
-    }) {
-        siv.call_on_name("score", |view: &mut TextView| {
-            view.set_content(score_string);
-        });
-    }
-}
-
-// fn score_string(gs: &GameState) -> SpannedString<Style> {
-//     let mut ss = SpannedString::styled("Errors: ", Style::title_primary());
-//     ss.append_plain(gs.num_questions_wrong().to_string());
-//     ss.append_plain(" | ");
-//     ss.append_styled("Hands seen: ", Style::title_primary());
-//     ss.append_plain(gs.num_questions_asked().to_string());
-//     ss
-// }
-//
-fn check_event_input(e: &Event) -> bool {
-    matches!(e, Event::Char('h' | 's' | 'p' | 'd'))
-}
-
-fn process_input(event: &Event) -> Option<EventResult> {
-    if let Event::Char(ch) = event {
-        Action::from_key(*ch).map(|action| {
-            EventResult::with_cb(move |siv| {
-                let mut log: Option<String> = None;
-                let mut dialog: Option<Dialog> = None;
-                process_input_inner(action, siv, &mut log, &mut dialog);
-                if let Some(log) = log {
-                    add_log(siv, log);
-                }
-                if let Some(dialog) = dialog {
-                    siv.add_layer(dialog);
-                }
-                update_status_message(siv);
-                update_score(siv);
-                update_hands(siv);
-            })
-        })
-    } else {
-        None
-    }
-}
-
-fn process_input_inner(
-    action: Action,
-    siv: &mut Cursive,
-    log: &mut Option<String>,
-    dialog: &mut Option<Dialog>,
-) {
-    siv.with_user_data(|gs: &mut SharedUserData| {
-        let mut user_data = gs.write().unwrap();
-        if let Ok((chart_action, table_index)) = user_data.game_state.chart_action() {
+        if let Ok((chart_action, table_index)) = self.game_state.chart_action() {
             let action_from_rules = chart_action.apply_rules();
             if Some(action) == action_from_rules {
-                user_data.game_state.answered_right();
-                user_data.message = GameMessage::correct(format!("Correct: {}", action));
+                self.game_state.answered_right();
+                self.status = StatusMessage::Correct(format!("Correct: {}", action));
             } else {
-                user_data.game_state.answered_wrong();
-                user_data.message = GameMessage::wrong(format!(
+                self.game_state.answered_wrong();
+                self.status = StatusMessage::Wrong(format!(
                     "WRONG: {}",
                     action_from_rules.map(|r| r.to_string()).unwrap_or_default()
                 ));
 
                 if let Some(correct_action) = action_from_rules {
-                    if let Some(table_index) = table_index {
-                        let _ = log.insert(format!(
-                            "{} (P: {}, D: {}))",
-                            phrase_for_row(table_index.row).to_string(),
-                            user_data.game_state.player_hand(),
-                            user_data.game_state.dealer_hand()
-                        ));
+                    let log_entry = if let Some(table_index) = table_index {
+                        format!(
+                            "{} (P: {}, D: {})",
+                            phrase_for_row(table_index.row),
+                            self.game_state.player_hand(),
+                            self.game_state.dealer_hand()
+                        )
                     } else {
-                        let _ = log.insert(format!(
+                        format!(
                             "Player: {}, Dealer: {}, Correct: {}, Guess: {}",
-                            user_data.game_state.player_hand(),
-                            user_data.game_state.dealer_hand(),
+                            self.game_state.player_hand(),
+                            self.game_state.dealer_hand(),
                             correct_action,
                             action
-                        ));
-                    }
+                        )
+                    };
+                    self.error_log.insert(0, log_entry);
                 }
             }
-            if !user_data.game_state.deal_a_hand() {
-                *dialog = Some(
-                    Dialog::new()
-                        .content(TextView::new("Shuffling a new shoe."))
-                        .button("Shuffle", |s| {
-                            s.with_user_data(|gs: &mut SharedUserData| {
-                                let mut user_data = gs.write().unwrap();
-                                user_data.game_state.shuffle();
-                                user_data.game_state.deal_a_hand();
-                            });
-                            update_hands(s);
-                            s.pop_layer();
-                        }),
-                );
+            if !self.game_state.deal_a_hand() {
+                self.show_shuffle_prompt = true;
             }
-        } else {
-            println!("NO CHART ACTION");
-            println!("D: {:?}", user_data.game_state.dealer_hand());
-            println!("P: {:?}", user_data.game_state.player_hand());
         }
-    });
-}
-
-fn make_keymap() -> impl View {
-    // TODO: need Insurance and Surrender
-    LinearLayout::horizontal().child(
-        TextView::new("(H)it | (S)tand | (D)ouble | S(P)lit")
-            .h_align(HAlign::Center)
-            .v_align(VAlign::Bottom)
-            .full_width(), //            .full_screen(),
-    )
-}
-
-fn make_log() -> impl View {
-    Panel::new(
-        LinearLayout::vertical()
-            .with_name("log")
-            .scrollable()
-            .scroll_y(true)
-            .full_screen(),
-    )
-    .title("Mistakes")
-    .title_position(HAlign::Left)
-}
-
-fn add_log(siv: &mut Cursive, log: String) {
-    let style = Style {
-        effects: Default::default(),
-        color: ColorStyle::new(White, Red.dark()),
-    };
-    let mut styled = SpannedString::styled("Error:", style);
-    styled.append_plain(" ");
-    styled.append_plain(log);
-    siv.call_on_name("log", |view: &mut LinearLayout| {
-        view.insert_child(0, TextView::new(styled));
-    });
-}
-
-fn create_ui(siv: &mut CursiveRunnable) {
-    if let Some(panel) = siv.with_user_data(|sgs: &mut SharedUserData| {
-        let gs = &sgs.read().unwrap().game_state;
-        OnEventView::new(Panel::new(
-            LinearLayout::vertical()
-                .child(make_score(gs))
-                .child(DummyView)
-                .child(DummyView)
-                .child(DummyView)
-                .child(make_dealer_hand(gs))
-                .child(DummyView)
-                .child(make_player_hand(gs))
-                .child(DummyView)
-                .child(make_status_message())
-                .child(DummyView)
-                .child(make_log())
-                .child(DummyView)
-                .child(make_keymap()),
-        ))
-        .on_event_inner(check_event_input, |_, e| process_input(e))
-        .full_screen()
-    }) {
-        siv.add_fullscreen_layer(panel);
     }
 }
 
-fn make_status_message() -> impl View {
-    TextView::new("")
-        .h_align(HAlign::Left)
-        .v_align(VAlign::Center)
-        .with_name("status")
-        .full_width()
+fn numbers_string(num: usize, wrong: usize) -> String {
+    if num == 0 {
+        return "0 / 0".to_string();
+    }
+    let pct = (num - wrong) as f64 / num as f64 * 100.0;
+    format!("{} / {} ({:.1}%)", num - wrong, num, pct)
 }
 
-fn update_status_message(siv: &mut Cursive) {
-    let message = siv
-        .with_user_data(|gs: &mut SharedUserData| gs.read().unwrap().message.clone())
-        .unwrap_or_default();
+fn draw(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &App) -> io::Result<()> {
+    terminal.draw(|f| {
+        let area = f.area();
 
-    siv.call_on_name("status", |view: &mut TextView| view.set_content(message));
+        // Main layout: stats, hands, status, log, keymap
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(5),  // stats
+                Constraint::Length(2),  // spacing + dealer
+                Constraint::Length(2),  // spacing + player
+                Constraint::Length(2),  // spacing + status
+                Constraint::Min(4),    // error log
+                Constraint::Length(1), // keymap
+            ])
+            .split(area);
+
+        // Stats block
+        draw_stats(f, chunks[0], &app.game_state);
+
+        // Dealer hand
+        let dealer_line = Line::from(vec![
+            Span::styled("Dealer: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw(format!("{}", app.game_state.dealer_hand())),
+        ]);
+        f.render_widget(Paragraph::new(dealer_line), centered_line(chunks[1], 1));
+
+        // Player hand
+        let player_line = Line::from(vec![
+            Span::styled("Player: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw(format!("{}", app.game_state.player_hand())),
+        ]);
+        f.render_widget(Paragraph::new(player_line), centered_line(chunks[2], 1));
+
+        // Status message
+        let status_widget = match &app.status {
+            StatusMessage::Correct(msg) => {
+                Paragraph::new(msg.as_str()).style(Style::default().fg(Color::Green))
+            }
+            StatusMessage::Wrong(msg) => {
+                Paragraph::new(format!(" {} ", msg))
+                    .style(Style::default().fg(Color::White).bg(Color::Red))
+            }
+            StatusMessage::None => Paragraph::new(""),
+        };
+        f.render_widget(status_widget, centered_line(chunks[3], 1));
+
+        // Error log
+        let log_items: Vec<ListItem> = app
+            .error_log
+            .iter()
+            .map(|entry| {
+                ListItem::new(Line::from(vec![
+                    Span::styled("Error: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                    Span::raw(entry.as_str()),
+                ]))
+            })
+            .collect();
+        let log_list = List::new(log_items)
+            .block(Block::default().borders(Borders::ALL).title("Mistakes"));
+        f.render_widget(log_list, chunks[4]);
+
+        // Keymap
+        let keymap = if app.show_shuffle_prompt {
+            Paragraph::new("Shoe empty. Press ENTER or SPACE to shuffle.")
+                .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        } else {
+            Paragraph::new("(H)it | (S)tand | (D)ouble | S(P)lit | (Q)uit")
+        };
+        f.render_widget(keymap, chunks[5]);
+    })?;
+    Ok(())
 }
 
-fn main() {
-    let mut siv = cursive::default();
-    siv.set_theme(create_theme());
+fn centered_line(area: Rect, offset: u16) -> Rect {
+    Rect::new(area.x, area.y + offset, area.width, 1)
+}
 
-    let mut user_data = GameUserData::default();
-    user_data.game_state.deal_a_hand();
+fn draw_stats(f: &mut ratatui::Frame, area: Rect, gs: &GameState) {
+    let block = Block::default().borders(Borders::ALL).title("Stats");
+    let inner = block.inner(area);
+    f.render_widget(block, area);
 
-    siv.set_user_data(Arc::new(RwLock::new(user_data)));
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(1)])
+        .split(inner);
 
-    create_ui(&mut siv);
+    // Top row: Hands score
+    let hands_line = Line::from(vec![
+        Span::styled("Hands: ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::raw(numbers_string(
+            gs.num_questions_asked(),
+            gs.num_questions_wrong(),
+        )),
+    ]);
+    f.render_widget(Paragraph::new(hands_line), rows[0]);
 
-    siv.set_global_callback('q', |s| s.quit());
+    // Bottom row: Hard | Soft | Split | Double (placeholders matching original)
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+            Constraint::Percentage(25),
+        ])
+        .split(rows[1]);
 
-    siv.run();
+    for (i, label) in ["Hard:", "Soft:", "Split:", "Double:"].iter().enumerate() {
+        let line = Line::from(vec![
+            Span::styled(*label, Style::default().add_modifier(Modifier::BOLD)),
+        ]);
+        f.render_widget(Paragraph::new(line), cols[i]);
+    }
+}
+
+fn main() -> io::Result<()> {
+    // Setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut app = App::new();
+
+    loop {
+        draw(&mut terminal, &app)?;
+
+        if let Event::Key(key) = event::read()? {
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+            match key.code {
+                KeyCode::Char('q') if !app.show_shuffle_prompt => break,
+                code => app.handle_key(code),
+            }
+        }
+    }
+
+    // Restore terminal
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+    Ok(())
 }
