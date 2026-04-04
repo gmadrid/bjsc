@@ -9,6 +9,13 @@ use std::fmt::Display;
 use std::str::FromStr;
 pub use table_type::TableType;
 
+#[macro_export]
+macro_rules! rowidx {
+    ($arg1:expr, $arg2:expr) => {
+        RowIndex::new($arg1, $arg2).unwrap()
+    };
+}
+
 // The TableIndex refers to a particular cell in the Strategy Tables.
 // It is intended to be an opaque type, but it can be converted to/from a string so that it
 // can be used as a key in a Hashtable that can be serialized.

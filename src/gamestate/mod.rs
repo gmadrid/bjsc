@@ -3,6 +3,8 @@ use crate::shoe::Shoe;
 use crate::strat::{lookup_action, ChartAction, TableIndex};
 use crate::BjResult;
 
+mod stats;
+
 const NUM_DECKS: usize = 6;
 
 #[derive(Debug)]

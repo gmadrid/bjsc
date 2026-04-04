@@ -11,4 +11,4 @@ pub use bjerror::*;
 pub use gamestate::GameState;
 pub use hand::Hand;
 pub use leitner::LeitnerState;
-pub use strat::Action;
+pub use strat::{phrase_for_row, Action};

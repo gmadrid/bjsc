@@ -1,5 +1,5 @@
 use crate::game_message::GameMessage;
-use bjsc::{Action, GameState, Hand};
+use bjsc::{phrase_for_row, Action, GameState, Hand};
 use cursive::align::{HAlign, VAlign};
 use cursive::event::{Event, EventResult};
 use cursive::style::BaseColor::{Blue, Red, White};
@@ -178,7 +178,7 @@ fn process_input_inner(
 ) {
     siv.with_user_data(|gs: &mut SharedUserData| {
         let mut user_data = gs.write().unwrap();
-        if let Ok((chart_action, _)) = user_data.game_state.chart_action() {
+        if let Ok((chart_action, table_index)) = user_data.game_state.chart_action() {
             let action_from_rules = chart_action.apply_rules();
             if Some(action) == action_from_rules {
                 user_data.game_state.answered_right();
@@ -191,13 +191,22 @@ fn process_input_inner(
                 ));
 
                 if let Some(correct_action) = action_from_rules {
-                    let _ = log.insert(format!(
-                        "Player: {}, Dealer: {}, Correct: {}, Guess: {}",
-                        user_data.game_state.player_hand(),
-                        user_data.game_state.dealer_hand(),
-                        correct_action,
-                        action
-                    ));
+                    if let Some(table_index) = table_index {
+                        let _ = log.insert(format!(
+                            "{} (P: {}, D: {}))",
+                            phrase_for_row(table_index.row).to_string(),
+                            user_data.game_state.player_hand(),
+                            user_data.game_state.dealer_hand()
+                        ));
+                    } else {
+                        let _ = log.insert(format!(
+                            "Player: {}, Dealer: {}, Correct: {}, Guess: {}",
+                            user_data.game_state.player_hand(),
+                            user_data.game_state.dealer_hand(),
+                            correct_action,
+                            action
+                        ));
+                    }
                 }
             }
             if !user_data.game_state.deal_a_hand() {
