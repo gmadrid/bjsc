@@ -1,3 +1,7 @@
+[workspace]
+members = ["bjsc-tui", "bjsc-web"]
+resolver = "2"
+
 [package]
 name = "bjsc"
 version = "0.1.0"
@@ -5,12 +9,9 @@ edition = "2021"
 
 [lib]
 
-
 [dependencies]
-crossterm = "0.28"
 itertools = "0.14.0"
 rand = "0.8.5"
-ratatui = "0.29"
 serde = { version = "1.0.217", features = ["derive"] }
 toml = "0.8.19"
 thiserror = "2.0.11"
