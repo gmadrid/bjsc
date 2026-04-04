@@ -2,8 +2,8 @@ use crate::card::Pip::{Ace, Eight, Five, Four, Nine, Seven, Six, Ten, Three, Two
 use crate::rowidx;
 use crate::strat::tableindex::RowIndex;
 use crate::strat::tableindex::TableType::{Hard, Soft, Split, Surrender};
-use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 macro_rules! phrase_row {
     ($m:expr, $t:expr, $c:expr, $p:expr) => {
@@ -11,11 +11,10 @@ macro_rules! phrase_row {
     };
 }
 
-lazy_static! {
-    // These phrases are from the Blackjack Apprentice site.
-    // They are available at this publicly readable link: https://www.blackjackapprenticeship.com/blackjack-strategy-charts/
-    static ref PHRASES: HashMap<RowIndex, &'static str> = {
-        let mut m = HashMap::new();
+// These phrases are from the Blackjack Apprentice site.
+// They are available at this publicly readable link: https://www.blackjackapprenticeship.com/blackjack-strategy-charts/
+static PHRASES: LazyLock<HashMap<RowIndex, &'static str>> = LazyLock::new(|| {
+    let mut m = HashMap::new();
 
         phrase_row!(m, Surrender, 15, "15 surrenders against dealer 10, otherwise don’t surrender (revert to hard totals).");
         phrase_row!(m, Surrender, 16, "16 surrenders against dealer 9 through Ace, otherwise don’t surrender (revert to hard totals).");
@@ -52,9 +51,8 @@ lazy_static! {
         phrase_row!(m, Hard, 16, "16 stands against dealer 2 through 6, otherwise hit.");
         phrase_row!(m, Hard, 17, "17 and up always stands.");
 
-        m
-    };
-}
+    m
+});
 
 pub fn phrase_for_row(ri: RowIndex) -> &'static str {
     // PHRASES should have all possible Row indices.
