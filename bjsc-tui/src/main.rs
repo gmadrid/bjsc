@@ -265,30 +265,34 @@ impl App {
             deck: self.game_state.deck().clone(),
         });
 
-        // Sync to cloud if authenticated
+        // Sync to cloud in background
         if let Some(ref auth) = self.auth {
             let config = supabase_config();
-            let result = self.rt.block_on(api::upsert_user_deck(
-                &config,
-                &auth.access_token,
-                &auth.user_id,
-                self.game_state.study_mode(),
-                self.game_state.deck(),
-            ));
+            let auth_clone = auth.clone();
+            let mode = self.game_state.study_mode();
+            let deck = self.game_state.deck().clone();
 
-            // If save failed, try refreshing the token and retry
-            if result.is_err() {
-                if let Some(new_auth) = auth::refresh_tokens(&config, auth, &self.rt) {
-                    let _ = self.rt.block_on(api::upsert_user_deck(
-                        &config,
-                        &new_auth.access_token,
-                        &new_auth.user_id,
-                        self.game_state.study_mode(),
-                        self.game_state.deck(),
-                    ));
-                    self.auth = Some(new_auth);
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                let result = rt.block_on(api::upsert_user_deck(
+                    &config,
+                    &auth_clone.access_token,
+                    &auth_clone.user_id,
+                    mode,
+                    &deck,
+                ));
+                if result.is_err() {
+                    if let Some(new_auth) = auth::refresh_tokens(&config, &auth_clone, &rt) {
+                        let _ = rt.block_on(api::upsert_user_deck(
+                            &config,
+                            &new_auth.access_token,
+                            &new_auth.user_id,
+                            mode,
+                            &deck,
+                        ));
+                    }
                 }
-            }
+            });
         }
     }
 
@@ -359,6 +363,7 @@ impl App {
     ) {
         if let Some(ref auth) = self.auth {
             let config = supabase_config();
+            let token = auth.access_token.clone();
             let row = bjsc::supabase::AnswerLogRow {
                 user_id: auth.user_id.clone(),
                 table_index: table_index_key.to_string(),
@@ -366,9 +371,10 @@ impl App {
                 player_action: player_action.to_string(),
                 correct_action: correct_action.to_string(),
             };
-            let _ = self
-                .rt
-                .block_on(api::insert_answer_log(&config, &auth.access_token, &row));
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                let _ = rt.block_on(api::insert_answer_log(&config, &token, &row));
+            });
         }
     }
 }
