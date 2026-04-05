@@ -1,3 +1,8 @@
+mod api;
+mod auth;
+
+use auth::AuthState;
+use bjsc::supabase::SupabaseConfig;
 use bjsc::{Action, GameState, Stats};
 use leptos::prelude::*;
 use spaced_rep::NUM_BOXES;
@@ -5,12 +10,22 @@ use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
+const SUPABASE_URL: &str = "https://pecwxusghnxlvzmfcqrj.supabase.co";
+const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY3d4dXNnaG54bHZ6bWZjcXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTY3MjUsImV4cCI6MjA5MDkzMjcyNX0.LwgaAHruQ8cA3mHrtCCB00WSqttpwRusAf0Y1WEFWuE";
+
 thread_local! {
     static GAME: RefCell<GameState> = RefCell::new({
         let mut gs = GameState::default();
         gs.deal_a_hand();
         gs
     });
+}
+
+fn supabase_config() -> SupabaseConfig {
+    SupabaseConfig {
+        base_url: SUPABASE_URL.to_string(),
+        anon_key: SUPABASE_ANON_KEY.to_string(),
+    }
 }
 
 fn main() {
@@ -71,8 +86,57 @@ fn push_display(
     mode_text.set(data.mode.clone());
 }
 
+/// Save the current game state to Supabase (fire-and-forget).
+fn save_to_cloud(auth: &AuthState) {
+    let config = supabase_config();
+    let token = auth.access_token.clone();
+    let user_id = auth.user_id.clone();
+    let (mode, deck) = GAME.with_borrow(|gs| (gs.study_mode(), gs.deck().clone()));
+
+    leptos::task::spawn_local(async move {
+        let _ = api::upsert_user_deck(&config, &token, &user_id, mode, &deck).await;
+    });
+}
+
 #[component]
 fn App() -> impl IntoView {
+    // Check for OAuth redirect tokens, then try localStorage
+    let initial_auth = auth::check_url_for_tokens().or_else(auth::load_from_storage);
+    let auth_state: RwSignal<Option<AuthState>> = RwSignal::new(initial_auth);
+
+    view! {
+        <div class="w-full max-w-xl px-4">
+            {move || {
+                if auth_state.get().is_some() {
+                    view! { <GameView auth_state=auth_state /> }.into_any()
+                } else {
+                    view! { <LoginView /> }.into_any()
+                }
+            }}
+        </div>
+    }
+}
+
+#[component]
+fn LoginView() -> impl IntoView {
+    let login_url = auth::google_login_url(SUPABASE_URL);
+
+    view! {
+        <div class="flex flex-col items-center justify-center pt-24 gap-8">
+            <h1 class="text-3xl font-bold text-cyan-400">"BJSC"</h1>
+            <p class="text-gray-400">"Blackjack Strategy Card Trainer"</p>
+            <a
+                href=login_url
+                class="px-6 py-3 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-200 transition-colors"
+            >
+                "Sign in with Google"
+            </a>
+        </div>
+    }
+}
+
+#[component]
+fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let dealer_text = RwSignal::new(String::new());
     let player_text = RwSignal::new(String::new());
     let score_text = RwSignal::new(String::new());
@@ -89,6 +153,7 @@ fn App() -> impl IntoView {
     let show_histogram = RwSignal::new(false);
     let box_counts: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
     let unseen_count = RwSignal::new(0u32);
+    let loading = RwSignal::new(true);
 
     let sync_all = move || {
         let data = read_display();
@@ -106,10 +171,27 @@ fn App() -> impl IntoView {
         box_counts.set(data.box_counts);
         unseen_count.set(data.unseen);
     };
-    sync_all();
+
+    // Load deck from Supabase on mount
+    {
+        let auth = auth_state.get_untracked().unwrap();
+        let config = supabase_config();
+        let token = auth.access_token.clone();
+        leptos::task::spawn_local(async move {
+            if let Ok(Some(row)) = api::fetch_user_deck(&config, &token).await {
+                GAME.with_borrow_mut(|gs| {
+                    gs.set_deck(row.deck);
+                    gs.set_study_mode(row.study_mode);
+                    gs.deal_a_hand();
+                });
+            }
+            loading.set(false);
+            sync_all();
+        });
+    }
 
     let do_action = move |action: Action| {
-        if show_shuffle.get_untracked() {
+        if show_shuffle.get_untracked() || loading.get_untracked() {
             return;
         }
         let outcome = GAME.with_borrow_mut(|gs| {
@@ -144,6 +226,11 @@ fn App() -> impl IntoView {
             }
         }
         sync_all();
+
+        // Save to cloud
+        if let Some(auth) = auth_state.get_untracked() {
+            save_to_cloud(&auth);
+        }
     };
 
     let do_shuffle = move || {
@@ -164,6 +251,16 @@ fn App() -> impl IntoView {
         status_visible.set(false);
         show_shuffle.set(false);
         sync_all();
+
+        // Save mode change to cloud immediately
+        if let Some(auth) = auth_state.get_untracked() {
+            save_to_cloud(&auth);
+        }
+    };
+
+    let sign_out = move |_| {
+        auth::clear_storage();
+        auth_state.set(None);
     };
 
     // Global keyboard listener
@@ -211,7 +308,12 @@ fn App() -> impl IntoView {
     let toggle_histogram = move |_| show_histogram.update(|v| *v = !*v);
 
     view! {
-        <div class="w-full max-w-xl px-4">
+        // Loading state
+        <div class="text-center py-8 text-gray-400" class:hidden=move || !loading.get()>
+            "Loading..."
+        </div>
+
+        <div class:hidden=move || loading.get()>
             // Mode bar
             <div class="flex items-center gap-4 mb-4 py-2 border-b border-gray-700">
                 <span class="font-bold text-gray-400">"Mode: "</span>
@@ -227,6 +329,10 @@ fn App() -> impl IntoView {
                 >
                     {move || if show_histogram.get() { "Back (Tab)" } else { "Stats (Tab)" }}
                 </button>
+                <button
+                    class="text-sm px-3 py-1 border border-red-900 rounded bg-slate-800 text-red-400 cursor-pointer hover:bg-red-950 hover:border-red-700"
+                    on:click=sign_out
+                >"Sign out"</button>
             </div>
 
             // Histogram screen

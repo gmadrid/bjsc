@@ -8,6 +8,7 @@ mod strat;
 mod hand_builder;
 pub mod persistence;
 mod studymode;
+pub mod supabase;
 mod table_index_keys;
 
 pub use bjerror::*;

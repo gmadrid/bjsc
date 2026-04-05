@@ -1,5 +1,10 @@
+mod api;
+mod auth;
+
+use auth::AuthTokens;
 use bjsc::card::Card;
 use bjsc::hand::Hand;
+use bjsc::supabase::SupabaseConfig;
 use bjsc::{persistence, Action, GameState, Stats};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::execute;
@@ -13,6 +18,16 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, List, ListItem, Paragraph};
 use ratatui::Terminal;
 use std::io;
+
+const SUPABASE_URL: &str = "https://pecwxusghnxlvzmfcqrj.supabase.co";
+const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY3d4dXNnaG54bHZ6bWZjcXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTY3MjUsImV4cCI6MjA5MDkzMjcyNX0.LwgaAHruQ8cA3mHrtCCB00WSqttpwRusAf0Y1WEFWuE";
+
+fn supabase_config() -> SupabaseConfig {
+    SupabaseConfig {
+        base_url: SUPABASE_URL.to_string(),
+        anon_key: SUPABASE_ANON_KEY.to_string(),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Screen {
@@ -33,31 +48,46 @@ struct App {
     error_log: Vec<String>,
     show_shuffle_prompt: bool,
     screen: Screen,
+    auth: Option<AuthTokens>,
+    rt: tokio::runtime::Runtime,
 }
 
 impl App {
-    fn new() -> Self {
+    fn new(auth: Option<AuthTokens>, rt: tokio::runtime::Runtime) -> Self {
         let saved = persistence::load_state();
         let mut game_state = GameState::default();
         game_state.set_deck(saved.deck);
         game_state.set_study_mode(saved.mode);
+
+        // If authenticated, try to load from cloud
+        if let Some(ref auth) = auth {
+            let config = supabase_config();
+            if let Ok(Some(row)) = rt.block_on(api::fetch_user_deck(&config, &auth.access_token)) {
+                game_state.set_deck(row.deck);
+                game_state.set_study_mode(row.study_mode);
+            }
+        }
+
         game_state.deal_a_hand();
-        let status = if saved.mode != bjsc::StudyMode::All {
-            StatusMessage::Correct(format!("Resumed: {}", saved.mode))
+
+        let status = if game_state.study_mode() != bjsc::StudyMode::All {
+            StatusMessage::Correct(format!("Resumed: {}", game_state.study_mode()))
         } else {
             StatusMessage::None
         };
+
         App {
             game_state,
             status,
             error_log: Vec::new(),
             show_shuffle_prompt: false,
             screen: Screen::Play,
+            auth,
+            rt,
         }
     }
 
     fn handle_key(&mut self, code: KeyCode) {
-        // Tab toggles between screens
         if code == KeyCode::Tab {
             self.screen = match self.screen {
                 Screen::Play => Screen::Histogram,
@@ -66,7 +96,6 @@ impl App {
             return;
         }
 
-        // On histogram screen, only Tab works (handled above)
         if self.screen == Screen::Histogram {
             return;
         }
@@ -80,7 +109,6 @@ impl App {
             return;
         }
 
-        // Mode cycling
         if code == KeyCode::Char('m') {
             let new_mode = self.game_state.study_mode().next();
             self.game_state.set_study_mode(new_mode);
@@ -121,17 +149,29 @@ impl App {
     }
 
     fn save(&self) {
+        // Save locally
         persistence::save_state(&bjsc::SavedState {
             mode: self.game_state.study_mode(),
             deck: self.game_state.deck().clone(),
         });
+
+        // Sync to cloud if authenticated
+        if let Some(ref auth) = self.auth {
+            let config = supabase_config();
+            let _ = self.rt.block_on(api::upsert_user_deck(
+                &config,
+                &auth.access_token,
+                &auth.user_id,
+                self.game_state.study_mode(),
+                self.game_state.deck(),
+            ));
+        }
     }
 }
 
 fn draw(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &App) -> io::Result<()> {
     terminal.draw(|f| {
         let area = f.area();
-
         match app.screen {
             Screen::Play => draw_play(f, area, app),
             Screen::Histogram => draw_histogram(f, area, app),
@@ -154,7 +194,6 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
         ])
         .split(area);
 
-    // Mode line
     let mode_line = Line::from(vec![
         Span::styled("Mode: ", Style::default().add_modifier(Modifier::BOLD)),
         Span::styled(
@@ -164,17 +203,11 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
     ]);
     f.render_widget(Paragraph::new(mode_line), chunks[0]);
 
-    // Stats block
     let summary = app.game_state.deck_summary();
     draw_stats(f, chunks[1], app.game_state.stats(), &summary);
-
-    // Dealer hand
     draw_hand(f, chunks[2], "Dealer", app.game_state.dealer_hand());
-
-    // Player hand
     draw_hand(f, chunks[3], "Player", app.game_state.player_hand());
 
-    // Status message
     let status_widget = match &app.status {
         StatusMessage::Correct(msg) => {
             Paragraph::new(msg.as_str()).style(Style::default().fg(Color::Green))
@@ -185,7 +218,6 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
     };
     f.render_widget(status_widget, centered_line(chunks[4], 1));
 
-    // Error log
     let log_width = chunks[5].width.saturating_sub(2) as usize;
     let log_items: Vec<ListItem> = app
         .error_log
@@ -231,7 +263,6 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
         List::new(log_items).block(Block::default().borders(Borders::ALL).title("Mistakes"));
     f.render_widget(log_list, chunks[5]);
 
-    // Keymap
     let keymap = if app.show_shuffle_prompt {
         Paragraph::new("Shoe empty. Press ENTER or SPACE to shuffle.").style(
             Style::default()
@@ -276,13 +307,12 @@ fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // title
-            Constraint::Min(10),   // chart
-            Constraint::Length(2), // unseen + hint
+            Constraint::Length(1),
+            Constraint::Min(10),
+            Constraint::Length(2),
         ])
         .split(area);
 
-    // Title
     let title = Line::from(vec![
         Span::styled(
             "Spaced Repetition Buckets",
@@ -294,7 +324,6 @@ fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
     ]);
     f.render_widget(Paragraph::new(title), chunks[0]);
 
-    // Bar chart
     let chart = BarChart::default()
         .block(Block::default().borders(Borders::ALL))
         .bar_width(7)
@@ -304,7 +333,6 @@ fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
         .max(box_counts.iter().copied().max().unwrap_or(1).max(1) as u64);
     f.render_widget(chart, chunks[1]);
 
-    // Footer: unseen count + hint
     let footer_rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(1), Constraint::Length(1)])
@@ -335,7 +363,6 @@ fn card_color(card: &Card) -> Color {
 fn draw_hand(f: &mut ratatui::Frame, area: Rect, label: &str, hand: &Hand) {
     let cards = hand.cards();
 
-    // Build 3 lines: tops, middles, bottoms
     let mut top_spans: Vec<Span> = vec![Span::styled(format!("{:>8}", ""), Style::default())];
     let mut mid_spans: Vec<Span> = vec![Span::styled(
         format!("{:>7} ", label),
@@ -347,7 +374,7 @@ fn draw_hand(f: &mut ratatui::Frame, area: Rect, label: &str, hand: &Hand) {
 
     for card in cards {
         let pip = format!("{}", card.pip);
-        let suit = format!("{}", card.suit);
+        let suit = card.suit.to_string();
 
         let pad = if pip.len() < 2 { " " } else { "" };
         let suit_color = card_color(card);
@@ -357,10 +384,7 @@ fn draw_hand(f: &mut ratatui::Frame, area: Rect, label: &str, hand: &Hand) {
         top_spans.push(Span::styled("┌──────┐", border));
         mid_spans.push(Span::styled("│", border));
         mid_spans.push(Span::styled(format!(" {} ", pip), white));
-        mid_spans.push(Span::styled(
-            suit.to_string(),
-            Style::default().fg(suit_color),
-        ));
+        mid_spans.push(Span::styled(suit, Style::default().fg(suit_color)));
         mid_spans.push(Span::styled(format!(" {}", pad), white));
         mid_spans.push(Span::styled("│", border));
         bot_spans.push(Span::styled("└──────┘", border));
@@ -389,7 +413,6 @@ fn draw_stats(f: &mut ratatui::Frame, area: Rect, stats: &Stats, summary: &bjsc:
         ])
         .split(inner);
 
-    // Row 1: total score
     let hands_line = Line::from(vec![
         Span::styled("Hands: ", Style::default().add_modifier(Modifier::BOLD)),
         Span::raw(Stats::numbers_string(
@@ -399,7 +422,6 @@ fn draw_stats(f: &mut ratatui::Frame, area: Rect, stats: &Stats, summary: &bjsc:
     ]);
     f.render_widget(Paragraph::new(hands_line), rows[0]);
 
-    // Row 2: per-category stats
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -425,7 +447,6 @@ fn draw_stats(f: &mut ratatui::Frame, area: Rect, stats: &Stats, summary: &bjsc:
         f.render_widget(Paragraph::new(line), cols[i]);
     }
 
-    // Row 3: Deck summary
     let deck_cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -453,13 +474,37 @@ fn draw_stats(f: &mut ratatui::Frame, area: Rect, stats: &Stats, summary: &bjsc:
 }
 
 fn main() -> io::Result<()> {
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+
+    // Authenticate before entering TUI
+    let config = supabase_config();
+    let auth = match auth::load_stored_tokens() {
+        Some(tokens) => {
+            println!("Loaded saved auth session.");
+            Some(tokens)
+        }
+        None => {
+            println!("No saved session. Starting Google sign-in...");
+            match auth::login(&config) {
+                Ok(tokens) => {
+                    println!("Signed in successfully!");
+                    Some(tokens)
+                }
+                Err(e) => {
+                    eprintln!("Auth failed: {}. Continuing offline.", e);
+                    None
+                }
+            }
+        }
+    };
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new();
+    let mut app = App::new(auth, rt);
 
     loop {
         draw(&mut terminal, &app)?;

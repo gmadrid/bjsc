@@ -1,0 +1,61 @@
+use bjsc::supabase::{fetch_deck_request, upsert_deck_request, SupabaseConfig, UserDeckRow};
+use bjsc::StudyMode;
+use spaced_rep::Deck;
+
+/// Fetch the user's deck from Supabase.
+pub async fn fetch_user_deck(
+    config: &SupabaseConfig,
+    token: &str,
+) -> Result<Option<UserDeckRow>, String> {
+    let req = fetch_deck_request(config, token);
+    let client = reqwest::Client::new();
+
+    let mut builder = client.get(&req.url);
+    for (k, v) in &req.headers {
+        builder = builder.header(k, v);
+    }
+
+    let resp = builder.send().await.map_err(|e| e.to_string())?;
+    let status = resp.status().as_u16();
+
+    if status == 406 || status == 404 {
+        return Ok(None);
+    }
+    if !resp.status().is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Fetch failed ({}): {}", status, text));
+    }
+
+    let row: UserDeckRow = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(Some(row))
+}
+
+/// Upsert the user's deck to Supabase.
+pub async fn upsert_user_deck(
+    config: &SupabaseConfig,
+    token: &str,
+    user_id: &str,
+    mode: StudyMode,
+    deck: &Deck,
+) -> Result<(), String> {
+    let req = upsert_deck_request(config, token, user_id, mode, deck);
+    let client = reqwest::Client::new();
+
+    let mut builder = client.post(&req.url);
+    for (k, v) in &req.headers {
+        builder = builder.header(k, v);
+    }
+    if let Some(body) = req.body {
+        builder = builder.body(body);
+    }
+
+    let resp = builder.send().await.map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Upsert failed ({}): {}", status, text));
+    }
+
+    Ok(())
+}

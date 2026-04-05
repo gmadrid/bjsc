@@ -6,7 +6,8 @@ An interactive trainer for memorizing blackjack basic strategy decisions.
 
 - `bjsc` (root) - Shared game logic library
 - `bjsc-tui` - Terminal UI (ratatui + crossterm)
-- `bjsc-web` - Web UI (Leptos CSR)
+- `bjsc-web` - Web UI (Leptos CSR + Tailwind)
+- `spaced-rep` - Generic spaced repetition engine (Leitner boxes)
 
 ## Running the TUI
 
@@ -14,7 +15,10 @@ An interactive trainer for memorizing blackjack basic strategy decisions.
 cargo run -p bjsc-tui
 ```
 
-**Keys:** `h` hit | `s` stand | `d` double | `p` split | `q` quit
+On first run, opens your browser for Google sign-in. Auth is saved to `~/.bjsc/auth.json`.
+Game progress syncs to Supabase and is also saved locally to `~/.bjsc/state.toml`.
+
+**Keys:** `h` hit | `s` stand | `d` double | `p` split | `m` mode | `Tab` stats | `q` quit
 
 ## Running the Web Version
 
@@ -23,6 +27,7 @@ cargo run -p bjsc-tui
 ```
 rustup target add wasm32-unknown-unknown
 cargo install trunk
+cd bjsc-web && pnpm install
 ```
 
 ### Start the dev server
@@ -32,7 +37,9 @@ cd bjsc-web
 trunk serve
 ```
 
-Opens at `http://127.0.0.1:8080`. Use the same keyboard shortcuts or click the buttons.
+Opens at `http://127.0.0.1:8080`. Sign in with Google to sync progress via Supabase.
+
+**Keys:** `h` hit | `s` stand | `d` double | `p` split | `m` mode | `Tab` stats
 
 ### Build for production
 
