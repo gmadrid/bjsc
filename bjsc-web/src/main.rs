@@ -44,6 +44,10 @@ struct DisplayData {
     mode: String,
     box_counts: [u32; NUM_BOXES as usize],
     unseen: u32,
+    new_count: u32,
+    weak_count: u32,
+    mastered_count: u32,
+    due_count: u32,
 }
 
 fn read_display() -> DisplayData {
@@ -60,6 +64,22 @@ fn read_display() -> DisplayData {
             mode: gs.study_mode().to_string(),
             box_counts: gs.box_counts(),
             unseen: gs.unseen_count(),
+            new_count: {
+                let ds = gs.deck_summary();
+                ds.unasked
+            },
+            weak_count: {
+                let ds = gs.deck_summary();
+                ds.weak
+            },
+            mastered_count: {
+                let ds = gs.deck_summary();
+                ds.mastered
+            },
+            due_count: {
+                let ds = gs.deck_summary();
+                ds.due
+            },
         }
     })
 }
@@ -177,6 +197,10 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let screen = RwSignal::new(0u8);
     let box_counts: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
     let unseen_count = RwSignal::new(0u32);
+    let new_count = RwSignal::new(0u32);
+    let weak_count = RwSignal::new(0u32);
+    let mastered_count = RwSignal::new(0u32);
+    let due_count = RwSignal::new(0u32);
     let progress_stats: RwSignal<bjsc::progress::ProgressStats> =
         RwSignal::new(bjsc::progress::ProgressStats::default());
     let loading = RwSignal::new(true);
@@ -196,6 +220,10 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         );
         box_counts.set(data.box_counts);
         unseen_count.set(data.unseen);
+        new_count.set(data.new_count);
+        weak_count.set(data.weak_count);
+        mastered_count.set(data.mastered_count);
+        due_count.set(data.due_count);
     };
 
     // Load deck from Supabase on mount, refreshing token if needed
@@ -532,6 +560,12 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                         <span><span class="font-bold text-gray-400">"Soft: "</span>{move || soft_stat.get()}</span>
                         <span><span class="font-bold text-gray-400">"Split: "</span>{move || split_stat.get()}</span>
                         <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || double_stat.get()}</span>
+                    </div>
+                    <div class="flex gap-6 mt-1">
+                        <span><span class="font-bold text-gray-500">"New: "</span><span class="text-gray-500">{move || new_count.get()}</span></span>
+                        <span><span class="font-bold text-gray-400">"Weak: "</span><span class="text-red-400">{move || weak_count.get()}</span></span>
+                        <span><span class="font-bold text-gray-400">"Mastered: "</span><span class="text-green-400">{move || mastered_count.get()}</span></span>
+                        <span><span class="font-bold text-gray-400">"Due: "</span><span class="text-yellow-400">{move || due_count.get()}</span></span>
                     </div>
                 </div>
 
