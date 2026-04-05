@@ -565,9 +565,16 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             // Coach screen
             <div class:hidden=move || screen.get() != 3>
                 <h2 class="font-bold text-cyan-400 text-lg mb-4">"Coach (powered by Claude)"</h2>
-                <div class="border border-gray-700 rounded-md px-4 py-4 whitespace-pre-wrap text-sm leading-relaxed">
-                    {move || coaching_text.get()}
-                </div>
+                <div
+                    class="border border-gray-700 rounded-md px-4 py-4 text-sm leading-relaxed prose prose-invert prose-sm max-w-none"
+                    inner_html=move || {
+                        let md = coaching_text.get();
+                        let parser = pulldown_cmark::Parser::new(&md);
+                        let mut html = String::new();
+                        pulldown_cmark::html::push_html(&mut html, parser);
+                        html
+                    }
+                />
             </div>
 
             // Play screen
