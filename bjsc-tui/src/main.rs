@@ -18,6 +18,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, List, ListItem, Paragraph};
 use ratatui::Terminal;
 use std::io;
+use std::sync::mpsc;
 
 const SUPABASE_URL: &str = "https://pecwxusghnxlvzmfcqrj.supabase.co";
 const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY3d4dXNnaG54bHZ6bWZjcXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTY3MjUsImV4cCI6MjA5MDkzMjcyNX0.LwgaAHruQ8cA3mHrtCCB00WSqttpwRusAf0Y1WEFWuE";
@@ -55,6 +56,7 @@ struct App {
     progress: bjsc::progress::ProgressStats,
     coaching_text: String,
     coach_scroll: u16,
+    coaching_rx: Option<mpsc::Receiver<String>>,
 }
 
 impl App {
@@ -105,6 +107,7 @@ impl App {
             progress: bjsc::progress::ProgressStats::default(),
             coaching_text: String::new(),
             coach_scroll: 0,
+            coaching_rx: None,
         }
     }
 
@@ -244,32 +247,45 @@ impl App {
         if let Some(ref auth) = self.auth {
             self.coaching_text = "Loading coaching advice...".to_string();
             self.coach_scroll = 0;
-            let config = supabase_config();
-            let result = self
-                .rt
-                .block_on(api::get_coaching(&config, &auth.access_token));
 
-            // If failed, try refreshing token and retry
-            let result = if result.is_err() {
-                if let Some(new_auth) = auth::refresh_tokens(&config, auth, &self.rt) {
-                    let r = self
-                        .rt
-                        .block_on(api::get_coaching(&config, &new_auth.access_token));
-                    self.auth = Some(new_auth);
-                    r
+            let (tx, rx) = mpsc::channel();
+            self.coaching_rx = Some(rx);
+
+            let config = supabase_config();
+            let auth_clone = auth.clone();
+
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                let result = rt.block_on(api::get_coaching(&config, &auth_clone.access_token));
+
+                // If failed, try refreshing token and retry
+                let result = if result.is_err() {
+                    if let Some(new_auth) = auth::refresh_tokens(&config, &auth_clone, &rt) {
+                        rt.block_on(api::get_coaching(&config, &new_auth.access_token))
+                    } else {
+                        result
+                    }
                 } else {
                     result
-                }
-            } else {
-                result
-            };
+                };
 
-            match result {
-                Ok(text) => self.coaching_text = text,
-                Err(e) => self.coaching_text = format!("Error: {}", e),
-            }
+                let text = match result {
+                    Ok(text) => text,
+                    Err(e) => format!("Error: {}", e),
+                };
+                let _ = tx.send(text);
+            });
         } else {
             self.coaching_text = "Sign in to get coaching advice.".to_string();
+        }
+    }
+
+    fn poll_coaching(&mut self) {
+        if let Some(ref rx) = self.coaching_rx {
+            if let Ok(text) = rx.try_recv() {
+                self.coaching_text = text;
+                self.coaching_rx = None;
+            }
         }
     }
 
@@ -961,15 +977,18 @@ fn main() -> io::Result<()> {
     let mut app = App::new(auth, rt);
 
     loop {
+        app.poll_coaching();
         draw(&mut terminal, &app)?;
 
-        if let Event::Key(key) = event::read()? {
-            if key.kind != KeyEventKind::Press {
-                continue;
-            }
-            match key.code {
-                KeyCode::Char('q') if !app.show_shuffle_prompt => break,
-                code => app.handle_key(code),
+        if event::poll(std::time::Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                match key.code {
+                    KeyCode::Char('q') if !app.show_shuffle_prompt => break,
+                    code => app.handle_key(code),
+                }
             }
         }
     }
