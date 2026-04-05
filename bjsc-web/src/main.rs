@@ -35,6 +35,7 @@ struct DisplayData {
     split: String,
     double: String,
     box_counts: [u32; NUM_BOXES as usize],
+    box_due: [u32; NUM_BOXES as usize],
     unseen: u32,
     new_count: u32,
     weak_count: u32,
@@ -55,6 +56,7 @@ fn read_display() -> DisplayData {
             split: Stats::numbers_string(s.split_count, s.split_wrong),
             double: Stats::numbers_string(s.double_count, s.double_wrong),
             box_counts: gs.box_counts(),
+            box_due: gs.box_due_counts(),
             unseen: gs.unseen_count(),
             new_count: ds.unasked,
             weak_count: ds.weak,
@@ -174,6 +176,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let screen = RwSignal::new(0u8);
     let coaching_text = RwSignal::new(String::new());
     let box_counts: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
+    let box_due: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
     let unseen_count = RwSignal::new(0u32);
     let new_count = RwSignal::new(0u32);
     let weak_count = RwSignal::new(0u32);
@@ -196,6 +199,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             double_stat,
         );
         box_counts.set(data.box_counts);
+        box_due.set(data.box_due);
         unseen_count.set(data.unseen);
         new_count.set(data.new_count);
         weak_count.set(data.weak_count);
@@ -474,24 +478,39 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 <div class="space-y-1.5">
                     {move || {
                         let counts = box_counts.get();
+                        let dues = box_due.get();
                         let max_val = counts.iter().copied().max().unwrap_or(1).max(1);
                         let labels = bjsc::BOX_LABELS;
                         let colors = ["#ff6b6b", "#e03131", "#ffd43b", "#fab005", "#66d9e8", "#22b8cf", "#4dabf7", "#51cf66", "#8ce99a"];
+                        let due_colors = ["#ffcccc", "#ff8888", "#fff3b0", "#ffe066", "#ccf2f7", "#99e5f0", "#b3d9ff", "#aaeeb0", "#d4f7d6"];
 
                         counts.iter().enumerate().map(|(i, &count)| {
-                            let pct = if max_val > 0 { (count as f64 / max_val as f64) * 100.0 } else { 0.0 };
+                            let due = dues[i];
+                            let not_due = count - due;
+                            let not_due_pct = if max_val > 0 { (not_due as f64 / max_val as f64) * 100.0 } else { 0.0 };
+                            let due_pct = if max_val > 0 { (due as f64 / max_val as f64) * 100.0 } else { 0.0 };
                             let color = colors[i];
+                            let due_color = due_colors[i];
                             let label = labels[i];
+                            let count_text = if due > 0 {
+                                format!("{} ({})", count, due)
+                            } else {
+                                format!("{}", count)
+                            };
                             view! {
                                 <div class="flex items-center gap-3">
                                     <span class="w-22 text-right text-sm text-gray-400 shrink-0">{format!("B{} ({})", i, label)}</span>
-                                    <div class="flex-1 h-5 bg-slate-800 rounded overflow-hidden">
-                                        <div class="histogram-bar-fill"
-                                             style:width=format!("{}%", pct)
+                                    <div class="flex-1 h-5 bg-slate-800 rounded overflow-hidden flex">
+                                        <div class="h-full rounded-l transition-all duration-300"
+                                             style:width=format!("{}%", not_due_pct)
                                              style:background-color=color>
                                         </div>
+                                        <div class="h-full transition-all duration-300"
+                                             style:width=format!("{}%", due_pct)
+                                             style:background-color=due_color>
+                                        </div>
                                     </div>
-                                    <span class="w-10 text-right text-sm shrink-0">{count}</span>
+                                    <span class="w-16 text-right text-sm shrink-0">{count_text}</span>
                                 </div>
                             }
                         }).collect::<Vec<_>>()

@@ -201,6 +201,20 @@ impl Deck {
         counts
     }
 
+    /// Per-box count of items that are currently due for review.
+    pub fn box_due_counts(&self, candidates: &[String]) -> [u32; NUM_BOXES as usize] {
+        let now = now_secs();
+        let mut counts = [0u32; NUM_BOXES as usize];
+        for key in candidates {
+            if let Some(item) = self.items.get(key.as_str()) {
+                if item.is_due(now) {
+                    counts[item.box_level as usize] += 1;
+                }
+            }
+        }
+        counts
+    }
+
     /// Number of candidates not yet seen.
     pub fn unseen_count(&self, candidates: &[String]) -> u32 {
         candidates

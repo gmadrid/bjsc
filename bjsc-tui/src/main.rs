@@ -1,5 +1,6 @@
 mod api;
 mod auth;
+mod split_bar_chart;
 
 use auth::AuthTokens;
 use bjsc::card::Card;
@@ -14,7 +15,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 use ratatui::Terminal;
 use std::io;
 use std::sync::mpsc;
@@ -615,7 +616,10 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
 }
 
 fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
+    use split_bar_chart::{SplitBar, SplitBarChart};
+
     let box_counts = app.game_state.box_counts();
+    let box_due = app.game_state.box_due_counts();
     let unseen = app.game_state.unseen_count();
 
     let intervals = bjsc::BOX_LABELS;
@@ -630,16 +634,29 @@ fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
         Color::Green,
         Color::LightGreen,
     ];
+    let due_colors = [
+        Color::Rgb(255, 200, 200),
+        Color::Rgb(255, 140, 140),
+        Color::Rgb(255, 243, 180),
+        Color::Rgb(255, 224, 100),
+        Color::Rgb(200, 240, 247),
+        Color::Rgb(150, 230, 240),
+        Color::Rgb(180, 218, 255),
+        Color::Rgb(170, 238, 176),
+        Color::Rgb(212, 247, 214),
+    ];
 
-    let bars: Vec<Bar> = box_counts
-        .iter()
-        .enumerate()
-        .map(|(i, &count)| {
-            Bar::default()
-                .value(count as u64)
-                .label(Line::from(format!("B{} ({})", i, intervals[i])))
-                .text_value(format!("{}", count))
-                .style(Style::default().fg(colors[i]))
+    let bars: Vec<SplitBar> = (0..spaced_rep::NUM_BOXES as usize)
+        .map(|i| {
+            let total = box_counts[i];
+            let due = box_due[i];
+            SplitBar {
+                label: format!(" B{} ({:<3})", i, intervals[i]),
+                primary: total - due,
+                secondary: due,
+                color: colors[i],
+                secondary_color: due_colors[i],
+            }
         })
         .collect();
 
@@ -663,14 +680,11 @@ fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
     ]);
     f.render_widget(Paragraph::new(title), chunks[0]);
 
-    let chart = BarChart::default()
-        .block(Block::default().borders(Borders::ALL))
-        .bar_width(7)
-        .bar_gap(2)
-        .group_gap(0)
-        .data(BarGroup::default().bars(&bars))
-        .max(box_counts.iter().copied().max().unwrap_or(1).max(1) as u64);
-    f.render_widget(chart, chunks[1]);
+    let block = Block::default().borders(Borders::ALL);
+    let inner = block.inner(chunks[1]);
+    f.render_widget(block, chunks[1]);
+
+    SplitBarChart { bars: &bars }.render(f, inner);
 
     let footer_rows = Layout::default()
         .direction(Direction::Vertical)
