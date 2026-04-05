@@ -102,7 +102,12 @@ pub async fn refresh_session(
 /// Build the Google OAuth login URL via Supabase.
 pub fn google_login_url(supabase_url: &str) -> String {
     let redirect = web_sys::window()
-        .and_then(|w| w.location().origin().ok())
+        .and_then(|w| {
+            let loc = w.location();
+            let origin = loc.origin().ok()?;
+            let pathname = loc.pathname().ok().unwrap_or_default();
+            Some(format!("{}{}", origin, pathname))
+        })
         .unwrap_or_default();
     format!(
         "{}/auth/v1/authorize?provider=google&redirect_to={}",
