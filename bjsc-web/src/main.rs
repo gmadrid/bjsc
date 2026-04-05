@@ -346,13 +346,14 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         }
     };
 
-    let sign_out = move |_| {
+    let sign_out = move || {
         auth::clear_storage();
         auth_state.set(None);
     };
 
-    let advance_screen = move || {
-        let next = (screen.get_untracked() + 1) % 4;
+    let menu_open = RwSignal::new(false);
+
+    let go_to_screen = move |next: u8| {
         if next == 2 {
             if let Some(auth) = auth_state.get_untracked() {
                 let config = supabase_config();
@@ -378,6 +379,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             }
         }
         screen.set(next);
+        menu_open.set(false);
     };
 
     // Global keyboard listener
@@ -391,11 +393,6 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 return;
             }
             let key = e.key();
-            if key == "Tab" {
-                e.prevent_default();
-                advance_screen();
-                return;
-            }
             if screen.get_untracked() != 0 {
                 return;
             }
@@ -418,8 +415,6 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
     closure.forget();
 
-    let cycle_screen = move |_| advance_screen();
-
     view! {
         // Loading state
         <div class="text-center py-8 text-gray-400" class:hidden=move || !loading.get()>
@@ -427,9 +422,13 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         </div>
 
         <div class:hidden=move || loading.get()>
-            // Mode bar
+            // Top bar
             <div class="flex items-center gap-4 mb-4 py-2 border-b border-gray-700">
-                <label class="font-bold text-gray-400" for="mode-select">"Mode: "</label>
+                // Screen title
+                <span class="font-bold text-cyan-400">
+                    {move || match screen.get() { 0 => "Play", 1 => "Stats", 2 => "Progress", 3 => "Coach", _ => "" }}
+                </span>
+                // Mode selector (play screen only)
                 <select
                     id="mode-select"
                     class="text-sm px-2 py-1 border border-gray-600 rounded bg-slate-800 text-amber-300 font-bold cursor-pointer hover:border-cyan-400 focus:border-cyan-400 focus:outline-none"
@@ -464,17 +463,67 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                     <option value="splits">"Splits"</option>
                     <option value="doubles">"Doubles"</option>
                 </select>
+                // Hamburger menu button (right side)
                 <button
                     class="ml-auto text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
-                    on:click=cycle_screen
+                    on:click=move |_| menu_open.set(!menu_open.get_untracked())
                 >
-                    {move || match screen.get() { 0 => "Stats (Tab)", 1 => "Progress (Tab)", 2 => "Coach (Tab)", _ => "Back (Tab)" }}
+                    {move || auth_state.get().map(|a| a.email).unwrap_or_else(|| "\u{2630}".to_string())}
                 </button>
-                <span class="text-xs text-gray-500">{move || auth_state.get().map(|a| a.email).unwrap_or_default()}</span>
-                <button
-                    class="text-sm px-3 py-1 border border-red-900 rounded bg-slate-800 text-red-400 cursor-pointer hover:bg-red-950 hover:border-red-700"
-                    on:click=sign_out
-                >"Sign out"</button>
+            </div>
+
+            // Slide-out menu overlay
+            <div
+                class="fixed inset-0 bg-black/50 z-40"
+                class:hidden=move || !menu_open.get()
+                on:click=move |_| menu_open.set(false)
+            />
+            // Slide-out menu panel
+            <div
+                class="fixed top-0 right-0 h-full w-64 bg-slate-900 border-l border-gray-700 z-50 transform transition-transform duration-200 ease-in-out flex flex-col"
+                class:translate-x-0=move || menu_open.get()
+                class:translate-x-full=move || !menu_open.get()
+            >
+                <div class="px-4 py-4 border-b border-gray-700">
+                    <span class="text-xs text-gray-500">{move || auth_state.get().map(|a| a.email).unwrap_or_default()}</span>
+                </div>
+                <nav class="flex flex-col px-2 py-2 gap-1">
+                    <button
+                        class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
+                        class:text-cyan-400=move || screen.get() == 0
+                        class:font-bold=move || screen.get() == 0
+                        class:text-gray-300=move || screen.get() != 0
+                        on:click=move |_| go_to_screen(0)
+                    >"Play"</button>
+                    <button
+                        class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
+                        class:text-cyan-400=move || screen.get() == 1
+                        class:font-bold=move || screen.get() == 1
+                        class:text-gray-300=move || screen.get() != 1
+                        on:click=move |_| go_to_screen(1)
+                    >"Stats"</button>
+                    <button
+                        class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
+                        class:text-cyan-400=move || screen.get() == 2
+                        class:font-bold=move || screen.get() == 2
+                        class:text-gray-300=move || screen.get() != 2
+                        on:click=move |_| go_to_screen(2)
+                    >"Progress"</button>
+                    <button
+                        class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
+                        class:text-cyan-400=move || screen.get() == 3
+                        class:font-bold=move || screen.get() == 3
+                        class:text-gray-300=move || screen.get() != 3
+                        on:click=move |_| go_to_screen(3)
+                    >"Coach"</button>
+                </nav>
+                <div class="border-t border-gray-700 mx-2" />
+                <div class="px-2 py-2">
+                    <button
+                        class="text-left w-full px-3 py-2 rounded text-sm text-red-400 hover:bg-red-950"
+                        on:click=move |_| { menu_open.set(false); sign_out(); }
+                    >"Sign out"</button>
+                </div>
             </div>
 
             // Histogram screen
@@ -700,7 +749,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
 
             // Keyboard hint
             <div class="flex justify-between text-xs py-4">
-                <span class="text-gray-400">"Keyboard: h / s / d / p / Tab (stats)"</span>
+                <span class="text-gray-400">"Keyboard: h / s / d / p"</span>
                 <span class="text-gray-600">{env!("BUILD_TIME")}</span>
             </div>
         </div>
