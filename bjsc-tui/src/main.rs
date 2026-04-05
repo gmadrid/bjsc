@@ -54,6 +54,7 @@ struct App {
     rt: tokio::runtime::Runtime,
     progress: bjsc::progress::ProgressStats,
     coaching_text: String,
+    coach_scroll: u16,
 }
 
 impl App {
@@ -103,6 +104,7 @@ impl App {
             rt,
             progress: bjsc::progress::ProgressStats::default(),
             coaching_text: String::new(),
+            coach_scroll: 0,
         }
     }
 
@@ -119,6 +121,19 @@ impl App {
             }
             if self.screen == Screen::Coach {
                 self.refresh_coaching();
+            }
+            return;
+        }
+
+        if self.screen == Screen::Coach {
+            match code {
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.coach_scroll = self.coach_scroll.saturating_add(1)
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.coach_scroll = self.coach_scroll.saturating_sub(1)
+                }
+                _ => {}
             }
             return;
         }
@@ -228,6 +243,7 @@ impl App {
     fn refresh_coaching(&mut self) {
         if let Some(ref auth) = self.auth {
             self.coaching_text = "Loading coaching advice...".to_string();
+            self.coach_scroll = 0;
             let config = supabase_config();
             let result = self
                 .rt
@@ -679,9 +695,11 @@ fn draw_coach(f: &mut ratatui::Frame, area: Rect, app: &App) {
     );
     f.render_widget(Paragraph::new(Line::from(title)), chunks[0]);
 
-    let text = Paragraph::new(app.coaching_text.as_str())
+    let md_lines = markdown_to_text(&app.coaching_text);
+    let text = Paragraph::new(md_lines)
         .wrap(ratatui::widgets::Wrap { trim: false })
-        .block(Block::default().borders(Borders::ALL));
+        .block(Block::default().borders(Borders::ALL))
+        .scroll((app.coach_scroll, 0));
     f.render_widget(text, chunks[1]);
 
     let hint_cols = Layout::default()
@@ -689,11 +707,99 @@ fn draw_coach(f: &mut ratatui::Frame, area: Rect, app: &App) {
         .constraints([Constraint::Min(1), Constraint::Length(22)])
         .split(chunks[2]);
 
-    let hint = Paragraph::new("Tab: Next | (Q)uit").style(Style::default().fg(Color::DarkGray));
+    let hint = Paragraph::new("↑/↓: Scroll | Tab: Next | (Q)uit")
+        .style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, hint_cols[0]);
 
     let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));
     f.render_widget(version, hint_cols[1]);
+}
+
+/// Convert markdown text to styled ratatui Lines.
+fn markdown_to_text(md: &str) -> Vec<Line<'_>> {
+    use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+
+    let parser = Parser::new_ext(md, Options::empty());
+    let mut lines: Vec<Line> = Vec::new();
+    let mut spans: Vec<Span> = Vec::new();
+    let mut bold = false;
+    let mut in_heading = false;
+    let mut list_bullet = false;
+
+    for event in parser {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                in_heading = true;
+                if level == HeadingLevel::H1 || level == HeadingLevel::H2 {
+                    bold = true;
+                }
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if !spans.is_empty() {
+                    lines.push(Line::from(std::mem::take(&mut spans)));
+                }
+                lines.push(Line::default());
+                in_heading = false;
+                bold = false;
+            }
+            Event::Start(Tag::Paragraph) => {}
+            Event::End(TagEnd::Paragraph) => {
+                if !spans.is_empty() {
+                    lines.push(Line::from(std::mem::take(&mut spans)));
+                }
+                lines.push(Line::default());
+            }
+            Event::Start(Tag::Strong) => bold = true,
+            Event::End(TagEnd::Strong) => bold = false,
+            Event::Start(Tag::Emphasis) => {}
+            Event::End(TagEnd::Emphasis) => {}
+            Event::Start(Tag::List(_)) => {}
+            Event::End(TagEnd::List(_)) => {}
+            Event::Start(Tag::Item) => {
+                list_bullet = true;
+            }
+            Event::End(TagEnd::Item) => {
+                if !spans.is_empty() {
+                    lines.push(Line::from(std::mem::take(&mut spans)));
+                }
+            }
+            Event::Text(text) => {
+                if list_bullet {
+                    spans.push(Span::raw("• "));
+                    list_bullet = false;
+                }
+                let style = if in_heading {
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
+                } else if bold {
+                    Style::default().add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+                spans.push(Span::styled(text.into_string(), style));
+            }
+            Event::SoftBreak => {
+                spans.push(Span::raw(" "));
+            }
+            Event::HardBreak => {
+                if !spans.is_empty() {
+                    lines.push(Line::from(std::mem::take(&mut spans)));
+                }
+            }
+            Event::Code(code) => {
+                spans.push(Span::styled(
+                    code.into_string(),
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
+            _ => {}
+        }
+    }
+    if !spans.is_empty() {
+        lines.push(Line::from(spans));
+    }
+    lines
 }
 
 fn centered_line(area: Rect, offset: u16) -> Rect {
