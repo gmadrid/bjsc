@@ -697,9 +697,9 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 </div>
 
                 // Action buttons
-                <div class="flex flex-wrap gap-3 justify-center mb-6">
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 justify-center mb-6">
                     <button
-                        class="px-5 py-2.5 border border-green-700 rounded-md bg-green-950 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-green-900 hover:border-green-500"
+                        class="col-span-2 sm:col-span-4 px-5 py-2.5 border border-green-700 rounded-md bg-green-950 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-green-900 hover:border-green-500"
                         class:hidden=move || !show_shuffle.get()
                         on:click=move |_| do_shuffle()
                     >
