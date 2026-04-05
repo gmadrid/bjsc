@@ -71,6 +71,16 @@ impl GameState {
         self.deck.summary(&keys)
     }
 
+    pub fn box_counts(&self) -> [u32; spaced_rep::NUM_BOXES as usize] {
+        let keys = keys_for_mode(self.study_mode);
+        self.deck.box_counts(&keys)
+    }
+
+    pub fn unseen_count(&self) -> u32 {
+        let keys = keys_for_mode(self.study_mode);
+        self.deck.unseen_count(&keys)
+    }
+
     pub fn set_deck(&mut self, deck: Deck) {
         self.deck = deck;
     }

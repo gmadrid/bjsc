@@ -2,7 +2,7 @@ use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-const NUM_BOXES: u8 = 8;
+pub const NUM_BOXES: u8 = 9;
 
 /// Interval in seconds for each box level.
 const INTERVALS: [u64; NUM_BOXES as usize] = [
@@ -10,10 +10,11 @@ const INTERVALS: [u64; NUM_BOXES as usize] = [
     60,      // Box 1: 1 minute
     300,     // Box 2: 5 minutes
     1_800,   // Box 3: 30 minutes
-    86_400,  // Box 4: 1 day
-    259_200, // Box 5: 3 days
-    432_000, // Box 6: 5 days
-    604_800, // Box 7: 1 week
+    7_200,   // Box 4: 2 hours
+    21_600,  // Box 5: 6 hours
+    86_400,  // Box 6: 1 day
+    259_200, // Box 7: 3 days
+    604_800, // Box 8: 1 week
 ];
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -184,6 +185,26 @@ impl Deck {
             .collect()
     }
 
+    /// Count of items at each box level for the given candidates.
+    /// Index = box level, value = count. Unseen items are not counted.
+    pub fn box_counts(&self, candidates: &[String]) -> [u32; NUM_BOXES as usize] {
+        let mut counts = [0u32; NUM_BOXES as usize];
+        for key in candidates {
+            if let Some(item) = self.items.get(key.as_str()) {
+                counts[item.box_level as usize] += 1;
+            }
+        }
+        counts
+    }
+
+    /// Number of candidates not yet seen.
+    pub fn unseen_count(&self, candidates: &[String]) -> u32 {
+        candidates
+            .iter()
+            .filter(|k| !self.items.contains_key(k.as_str()))
+            .count() as u32
+    }
+
     /// Summary of item states relative to a set of candidates.
     pub fn summary(&self, candidates: &[String]) -> DeckSummary {
         let now = now_secs();
@@ -202,8 +223,8 @@ impl Deck {
                 Some(item) => {
                     match item.box_level {
                         0..=1 => weak += 1,
-                        2..=5 => learning += 1,
-                        _ => mastered += 1, // box 6-7
+                        2..=6 => learning += 1,
+                        _ => mastered += 1, // box 7-8
                     }
                     if item.is_due(now) {
                         due += 1;

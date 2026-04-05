@@ -10,9 +10,15 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::widgets::{Bar, BarChart, BarGroup, Block, Borders, List, ListItem, Paragraph};
 use ratatui::Terminal;
 use std::io;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Screen {
+    Play,
+    Histogram,
+}
 
 #[derive(Debug, Clone)]
 enum StatusMessage {
@@ -26,6 +32,7 @@ struct App {
     status: StatusMessage,
     error_log: Vec<String>,
     show_shuffle_prompt: bool,
+    screen: Screen,
 }
 
 impl App {
@@ -45,10 +52,25 @@ impl App {
             status,
             error_log: Vec::new(),
             show_shuffle_prompt: false,
+            screen: Screen::Play,
         }
     }
 
     fn handle_key(&mut self, code: KeyCode) {
+        // Tab toggles between screens
+        if code == KeyCode::Tab {
+            self.screen = match self.screen {
+                Screen::Play => Screen::Histogram,
+                Screen::Histogram => Screen::Play,
+            };
+            return;
+        }
+
+        // On histogram screen, only Tab works (handled above)
+        if self.screen == Screen::Histogram {
+            return;
+        }
+
         if self.show_shuffle_prompt {
             if code == KeyCode::Enter || code == KeyCode::Char(' ') {
                 self.game_state.shuffle();
@@ -110,109 +132,192 @@ fn draw(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &App) -> io:
     terminal.draw(|f| {
         let area = f.area();
 
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // mode
-                Constraint::Length(6), // stats
-                Constraint::Length(3), // dealer
-                Constraint::Length(3), // player
-                Constraint::Length(2), // status
-                Constraint::Min(4),    // error log
-                Constraint::Length(1), // keymap
-            ])
-            .split(area);
+        match app.screen {
+            Screen::Play => draw_play(f, area, app),
+            Screen::Histogram => draw_histogram(f, area, app),
+        }
+    })?;
+    Ok(())
+}
 
-        // Mode line
-        let mode_line = Line::from(vec![
-            Span::styled("Mode: ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::styled(
-                app.game_state.study_mode().to_string(),
-                Style::default().fg(Color::Yellow),
-            ),
-        ]);
-        f.render_widget(Paragraph::new(mode_line), chunks[0]);
+fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // mode
+            Constraint::Length(6), // stats
+            Constraint::Length(3), // dealer
+            Constraint::Length(3), // player
+            Constraint::Length(2), // status
+            Constraint::Min(4),    // error log
+            Constraint::Length(1), // keymap
+        ])
+        .split(area);
 
-        // Stats block
-        let summary = app.game_state.deck_summary();
-        draw_stats(f, chunks[1], app.game_state.stats(), &summary);
+    // Mode line
+    let mode_line = Line::from(vec![
+        Span::styled("Mode: ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            app.game_state.study_mode().to_string(),
+            Style::default().fg(Color::Yellow),
+        ),
+    ]);
+    f.render_widget(Paragraph::new(mode_line), chunks[0]);
 
-        // Dealer hand
-        draw_hand(f, chunks[2], "Dealer", app.game_state.dealer_hand());
+    // Stats block
+    let summary = app.game_state.deck_summary();
+    draw_stats(f, chunks[1], app.game_state.stats(), &summary);
 
-        // Player hand
-        draw_hand(f, chunks[3], "Player", app.game_state.player_hand());
+    // Dealer hand
+    draw_hand(f, chunks[2], "Dealer", app.game_state.dealer_hand());
 
-        // Status message
-        let status_widget = match &app.status {
-            StatusMessage::Correct(msg) => {
-                Paragraph::new(msg.as_str()).style(Style::default().fg(Color::Green))
-            }
-            StatusMessage::Wrong(msg) => Paragraph::new(format!(" {} ", msg))
-                .style(Style::default().fg(Color::White).bg(Color::Red)),
-            StatusMessage::None => Paragraph::new(""),
-        };
-        f.render_widget(status_widget, centered_line(chunks[4], 1));
+    // Player hand
+    draw_hand(f, chunks[3], "Player", app.game_state.player_hand());
 
-        // Error log
-        let log_width = chunks[5].width.saturating_sub(2) as usize;
-        let log_items: Vec<ListItem> = app
-            .error_log
-            .iter()
-            .enumerate()
-            .map(|(i, entry)| {
-                if i == 0 {
-                    ListItem::new(Line::from(vec![
-                        Span::styled(
-                            "Error: ",
-                            Style::default()
-                                .fg(Color::LightRed)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(entry.as_str(), Style::default().fg(Color::White)),
-                    ]))
-                } else if i == 1 {
-                    ListItem::new(vec![
-                        Line::from(vec![Span::styled(
-                            "─".repeat(log_width),
-                            Style::default().fg(Color::DarkGray),
-                        )]),
-                        Line::from(vec![
-                            Span::styled(
-                                "Error: ",
-                                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                            ),
-                            Span::raw(entry.as_str()),
-                        ]),
-                    ])
-                } else {
-                    ListItem::new(Line::from(vec![
+    // Status message
+    let status_widget = match &app.status {
+        StatusMessage::Correct(msg) => {
+            Paragraph::new(msg.as_str()).style(Style::default().fg(Color::Green))
+        }
+        StatusMessage::Wrong(msg) => Paragraph::new(format!(" {} ", msg))
+            .style(Style::default().fg(Color::White).bg(Color::Red)),
+        StatusMessage::None => Paragraph::new(""),
+    };
+    f.render_widget(status_widget, centered_line(chunks[4], 1));
+
+    // Error log
+    let log_width = chunks[5].width.saturating_sub(2) as usize;
+    let log_items: Vec<ListItem> = app
+        .error_log
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            if i == 0 {
+                ListItem::new(Line::from(vec![
+                    Span::styled(
+                        "Error: ",
+                        Style::default()
+                            .fg(Color::LightRed)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(entry.as_str(), Style::default().fg(Color::White)),
+                ]))
+            } else if i == 1 {
+                ListItem::new(vec![
+                    Line::from(vec![Span::styled(
+                        "─".repeat(log_width),
+                        Style::default().fg(Color::DarkGray),
+                    )]),
+                    Line::from(vec![
                         Span::styled(
                             "Error: ",
                             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(entry.as_str()),
-                    ]))
-                }
-            })
-            .collect();
-        let log_list =
-            List::new(log_items).block(Block::default().borders(Borders::ALL).title("Mistakes"));
-        f.render_widget(log_list, chunks[5]);
+                    ]),
+                ])
+            } else {
+                ListItem::new(Line::from(vec![
+                    Span::styled(
+                        "Error: ",
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(entry.as_str()),
+                ]))
+            }
+        })
+        .collect();
+    let log_list =
+        List::new(log_items).block(Block::default().borders(Borders::ALL).title("Mistakes"));
+    f.render_widget(log_list, chunks[5]);
 
-        // Keymap
-        let keymap = if app.show_shuffle_prompt {
-            Paragraph::new("Shoe empty. Press ENTER or SPACE to shuffle.").style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )
-        } else {
-            Paragraph::new("(H)it | (S)tand | (D)ouble | S(P)lit | (M)ode | (Q)uit")
-        };
-        f.render_widget(keymap, chunks[6]);
-    })?;
-    Ok(())
+    // Keymap
+    let keymap = if app.show_shuffle_prompt {
+        Paragraph::new("Shoe empty. Press ENTER or SPACE to shuffle.").style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Paragraph::new("(H)it | (S)tand | (D)ouble | S(P)lit | (M)ode | Tab:Stats | (Q)uit")
+    };
+    f.render_widget(keymap, chunks[6]);
+}
+
+fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
+    let box_counts = app.game_state.box_counts();
+    let unseen = app.game_state.unseen_count();
+
+    let intervals = ["20s", "1m", "5m", "30m", "2h", "6h", "1d", "3d", "1w"];
+    let colors = [
+        Color::LightRed,
+        Color::Red,
+        Color::Yellow,
+        Color::Yellow,
+        Color::Cyan,
+        Color::Cyan,
+        Color::Blue,
+        Color::Green,
+        Color::LightGreen,
+    ];
+
+    let bars: Vec<Bar> = box_counts
+        .iter()
+        .enumerate()
+        .map(|(i, &count)| {
+            Bar::default()
+                .value(count as u64)
+                .label(Line::from(format!("B{} ({})", i, intervals[i])))
+                .text_value(format!("{}", count))
+                .style(Style::default().fg(colors[i]))
+        })
+        .collect();
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // title
+            Constraint::Min(10),   // chart
+            Constraint::Length(2), // unseen + hint
+        ])
+        .split(area);
+
+    // Title
+    let title = Line::from(vec![
+        Span::styled(
+            "Spaced Repetition Buckets",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(format!("  (Mode: {})", app.game_state.study_mode())),
+    ]);
+    f.render_widget(Paragraph::new(title), chunks[0]);
+
+    // Bar chart
+    let chart = BarChart::default()
+        .block(Block::default().borders(Borders::ALL))
+        .bar_width(7)
+        .bar_gap(2)
+        .group_gap(0)
+        .data(BarGroup::default().bars(&bars))
+        .max(box_counts.iter().copied().max().unwrap_or(1).max(1) as u64);
+    f.render_widget(chart, chunks[1]);
+
+    // Footer: unseen count + hint
+    let footer_rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(1)])
+        .split(chunks[2]);
+
+    let unseen_line = Line::from(vec![
+        Span::styled("Unseen: ", Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(format!("{}", unseen), Style::default().fg(Color::DarkGray)),
+    ]);
+    f.render_widget(Paragraph::new(unseen_line), footer_rows[0]);
+
+    let hint = Paragraph::new("Tab: Back | (Q)uit").style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, footer_rows[1]);
 }
 
 fn centered_line(area: Rect, offset: u16) -> Rect {
