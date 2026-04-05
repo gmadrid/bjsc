@@ -15,12 +15,12 @@ pub enum StudyMode {
 impl StudyMode {
     pub fn next(self) -> Self {
         match self {
-            StudyMode::All => StudyMode::Hard,
+            StudyMode::All => StudyMode::Drill,
+            StudyMode::Drill => StudyMode::Hard,
             StudyMode::Hard => StudyMode::Soft,
             StudyMode::Soft => StudyMode::Splits,
             StudyMode::Splits => StudyMode::Doubles,
-            StudyMode::Doubles => StudyMode::Drill,
-            StudyMode::Drill => StudyMode::All,
+            StudyMode::Doubles => StudyMode::All,
         }
     }
 

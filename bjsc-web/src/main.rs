@@ -1,5 +1,6 @@
 use bjsc::{Action, GameState, Stats};
 use leptos::prelude::*;
+use spaced_rep::NUM_BOXES;
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -26,6 +27,8 @@ struct DisplayData {
     split: String,
     double: String,
     mode: String,
+    box_counts: [u32; NUM_BOXES as usize],
+    unseen: u32,
 }
 
 /// Read all display data from game state in one borrow.
@@ -41,6 +44,8 @@ fn read_display() -> DisplayData {
             split: Stats::numbers_string(s.split_count, s.splits_wrong),
             double: Stats::numbers_string(s.double_count, s.doubles_wrong),
             mode: gs.study_mode().to_string(),
+            box_counts: gs.box_counts(),
+            unseen: gs.unseen_count(),
         }
     })
 }
@@ -83,6 +88,9 @@ fn App() -> impl IntoView {
     let status_visible = RwSignal::new(false);
     let errors: RwSignal<Vec<String>> = RwSignal::new(vec![]);
     let show_shuffle = RwSignal::new(false);
+    let show_histogram = RwSignal::new(false);
+    let box_counts: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
+    let unseen_count = RwSignal::new(0u32);
 
     let sync_all = move || {
         let data = read_display();
@@ -97,6 +105,8 @@ fn App() -> impl IntoView {
             double_stat,
             mode_text,
         );
+        box_counts.set(data.box_counts);
+        unseen_count.set(data.unseen);
     };
     sync_all();
 
@@ -174,6 +184,15 @@ fn App() -> impl IntoView {
             }
 
             let key = e.key();
+            if key == "Tab" {
+                e.prevent_default();
+                show_histogram.update(|v| *v = !*v);
+                return;
+            }
+            // On histogram screen, only Tab works
+            if show_histogram.get_untracked() {
+                return;
+            }
             if show_shuffle.get_untracked() {
                 if key == "Enter" || key == " " {
                     do_shuffle();
@@ -197,13 +216,57 @@ fn App() -> impl IntoView {
         .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
     closure.forget();
 
+    let toggle_histogram = move |_| show_histogram.update(|v| *v = !*v);
+
     view! {
         <div class="app">
             <div class="mode-bar">
                 <span class="label">"Mode: "</span>
                 <span class="mode-name">{move || mode_text.get()}</span>
-                <button class="mode-btn" on:click=move |_| cycle_mode()>"(M) Next"</button>
+                <button class="mode-btn" class:hidden=move || show_histogram.get() on:click=move |_| cycle_mode()>"(M) Next"</button>
+                <button class="mode-btn tab-btn" on:click=toggle_histogram>
+                    {move || if show_histogram.get() { "Back (Tab)" } else { "Stats (Tab)" }}
+                </button>
             </div>
+
+            // Histogram screen
+            <div class="histogram-screen" class:hidden=move || !show_histogram.get()>
+                <div class="histogram-title">"Spaced Repetition Buckets"</div>
+                <div class="histogram-chart">
+                    {move || {
+                        let counts = box_counts.get();
+                        let _unseen = unseen_count.get();
+                        let max_val = counts.iter().copied().max().unwrap_or(1).max(1);
+                        let labels = ["20s", "1m", "5m", "30m", "2h", "6h", "1d", "3d", "1w"];
+                        let colors = ["#ff6b6b", "#e03131", "#ffd43b", "#fab005", "#66d9e8", "#22b8cf", "#4dabf7", "#51cf66", "#8ce99a"];
+
+                        counts.iter().enumerate().map(|(i, &count)| {
+                            let pct = if max_val > 0 { (count as f64 / max_val as f64) * 100.0 } else { 0.0 };
+                            let color = colors[i];
+                            let label = labels[i];
+                            view! {
+                                <div class="histogram-bar-row">
+                                    <span class="histogram-label">{format!("B{} ({})", i, label)}</span>
+                                    <div class="histogram-bar-bg">
+                                        <div class="histogram-bar-fill"
+                                             style:width=format!("{}%", pct)
+                                             style:background-color=color>
+                                        </div>
+                                    </div>
+                                    <span class="histogram-count">{count}</span>
+                                </div>
+                            }
+                        }).collect::<Vec<_>>()
+                    }}
+                    <div class="histogram-unseen">
+                        <span class="label">"Unseen: "</span>
+                        <span>{move || unseen_count.get()}</span>
+                    </div>
+                </div>
+            </div>
+
+            // Play screen
+            <div class="play-screen" class:hidden=move || show_histogram.get()>
 
             <div class="stats-panel">
                 <div class="panel-title">"Stats"</div>
@@ -299,7 +362,9 @@ fn App() -> impl IntoView {
                 </div>
             </div>
 
-            <div class="keyboard-hint">"Keyboard: h / s / d / p / m (mode)"</div>
+            </div> // end play-screen
+
+            <div class="keyboard-hint">"Keyboard: h / s / d / p / m (mode) / Tab (stats)"</div>
         </div>
     }
 }
