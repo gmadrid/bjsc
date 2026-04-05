@@ -279,6 +279,11 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
         ])
         .split(area);
 
+    let mode_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(1), Constraint::Length(30)])
+        .split(chunks[0]);
+
     let mode_line = Line::from(vec![
         Span::styled("Mode: ", Style::default().add_modifier(Modifier::BOLD)),
         Span::styled(
@@ -286,7 +291,12 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
             Style::default().fg(Color::Yellow),
         ),
     ]);
-    f.render_widget(Paragraph::new(mode_line), chunks[0]);
+    f.render_widget(Paragraph::new(mode_line), mode_cols[0]);
+
+    if let Some(ref auth) = app.auth {
+        let email = Paragraph::new(auth.email.as_str()).style(Style::default().fg(Color::DarkGray));
+        f.render_widget(email, mode_cols[1]);
+    }
 
     let summary = app.game_state.deck_summary();
     draw_stats(f, chunks[1], app.game_state.stats(), &summary);

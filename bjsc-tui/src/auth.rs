@@ -8,6 +8,8 @@ pub struct AuthTokens {
     pub access_token: String,
     pub refresh_token: String,
     pub user_id: String,
+    #[serde(default)]
+    pub email: String,
 }
 
 fn auth_path() -> PathBuf {
@@ -80,11 +82,13 @@ pub fn refresh_tokens(
         .unwrap_or(&tokens.refresh_token)
         .to_string();
     let user_id = user_id_from_jwt(&access_token)?;
+    let email = bjsc::supabase::email_from_jwt(&access_token).unwrap_or_default();
 
     let new_tokens = AuthTokens {
         access_token,
         refresh_token,
         user_id,
+        email,
     };
     save_tokens(&new_tokens);
     Some(new_tokens)
@@ -206,11 +210,13 @@ if (hash) {{
     let access_token = access_token.ok_or("No access token received")?;
     let refresh_token = refresh_token.unwrap_or_default();
     let user_id = user_id_from_jwt(&access_token).ok_or("Could not extract user ID from token")?;
+    let email = bjsc::supabase::email_from_jwt(&access_token).unwrap_or_default();
 
     let tokens = AuthTokens {
         access_token,
         refresh_token,
         user_id,
+        email,
     };
     save_tokens(&tokens);
     Ok(tokens)

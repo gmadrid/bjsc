@@ -8,6 +8,8 @@ pub struct AuthState {
     pub access_token: String,
     pub refresh_token: String,
     pub user_id: String,
+    #[serde(default)]
+    pub email: String,
 }
 
 /// Check the URL hash for OAuth tokens (after Supabase redirect).
@@ -34,6 +36,7 @@ pub fn check_url_for_tokens() -> Option<AuthState> {
     let access_token = params.get("access_token")?.clone();
     let refresh_token = params.get("refresh_token").cloned().unwrap_or_default();
     let user_id = bjsc::supabase::user_id_from_jwt(&access_token)?;
+    let email = bjsc::supabase::email_from_jwt(&access_token).unwrap_or_default();
 
     // Clear the hash from the URL
     let _ = location.set_hash("");
@@ -42,6 +45,7 @@ pub fn check_url_for_tokens() -> Option<AuthState> {
         access_token,
         refresh_token,
         user_id,
+        email,
     };
     save_to_storage(&state);
     Some(state)
@@ -89,11 +93,13 @@ pub async fn refresh_session(
         .unwrap_or(&state.refresh_token)
         .to_string();
     let user_id = bjsc::supabase::user_id_from_jwt(&access_token)?;
+    let email = bjsc::supabase::email_from_jwt(&access_token).unwrap_or_default();
 
     let new_state = AuthState {
         access_token,
         refresh_token,
         user_id,
+        email,
     };
     save_to_storage(&new_state);
     Some(new_state)

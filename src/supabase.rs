@@ -158,14 +158,12 @@ pub struct AnswerLogEntry {
     pub created_at: String,
 }
 
-/// Extract the `sub` (user ID) from a JWT without verification.
-/// The JWT is base64-encoded: header.payload.signature
-pub fn user_id_from_jwt(token: &str) -> Option<String> {
+/// Decode the JWT payload as a JSON Value.
+fn jwt_payload(token: &str) -> Option<serde_json::Value> {
     let parts: Vec<&str> = token.split('.').collect();
     if parts.len() != 3 {
         return None;
     }
-    // Decode the payload (second part), handling missing padding
     let payload = parts[1];
     let padded = match payload.len() % 4 {
         2 => format!("{}==", payload),
@@ -173,8 +171,23 @@ pub fn user_id_from_jwt(token: &str) -> Option<String> {
         _ => payload.to_string(),
     };
     let decoded = base64_decode(&padded)?;
-    let json: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
-    json.get("sub")?.as_str().map(|s| s.to_string())
+    serde_json::from_slice(&decoded).ok()
+}
+
+/// Extract the `sub` (user ID) from a JWT without verification.
+pub fn user_id_from_jwt(token: &str) -> Option<String> {
+    jwt_payload(token)?
+        .get("sub")?
+        .as_str()
+        .map(|s| s.to_string())
+}
+
+/// Extract the email from a JWT without verification.
+pub fn email_from_jwt(token: &str) -> Option<String> {
+    jwt_payload(token)?
+        .get("email")?
+        .as_str()
+        .map(|s| s.to_string())
 }
 
 /// Minimal base64 URL-safe decoder (no external crate needed).

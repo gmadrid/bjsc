@@ -433,6 +433,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 >
                     {move || match screen.get() { 0 => "Stats (Tab)", 1 => "Progress (Tab)", _ => "Back (Tab)" }}
                 </button>
+                <span class="text-xs text-gray-500">{move || auth_state.get().map(|a| a.email).unwrap_or_default()}</span>
                 <button
                     class="text-sm px-3 py-1 border border-red-900 rounded bg-slate-800 text-red-400 cursor-pointer hover:bg-red-950 hover:border-red-700"
                     on:click=sign_out
