@@ -622,10 +622,10 @@ fn draw_progress(f: &mut ratatui::Frame, area: Rect, app: &App) {
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{:<20}", idx), Style::default().fg(Color::LightRed)),
                 Span::raw(format!(
-                    "wrong {}/{} ({:.0}%)",
+                    "{}/{} wrong ({:.0}%)",
                     wrong,
                     seen,
-                    (1.0 - *wrong as f64 / *seen as f64) * 100.0
+                    *wrong as f64 / *seen as f64 * 100.0
                 )),
             ]))
         })

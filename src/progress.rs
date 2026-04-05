@@ -102,13 +102,20 @@ impl ProgressStats {
             }
         }
 
-        // Trouble spots: sort by wrong count descending, take top 10
+        // Trouble spots: sort by wrong percentage descending, take top 10
         let mut trouble: Vec<(String, u32, u32)> = per_index
             .into_iter()
             .filter(|(_, (wrong, _))| *wrong > 0)
             .map(|(idx, (wrong, seen))| (idx, wrong, seen))
             .collect();
-        trouble.sort_by(|a, b| b.1.cmp(&a.1).then(b.2.cmp(&a.2)));
+        trouble.sort_by(|a, b| {
+            let pct_a = a.1 as f64 / a.2 as f64;
+            let pct_b = b.1 as f64 / b.2 as f64;
+            pct_b
+                .partial_cmp(&pct_a)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(b.1.cmp(&a.1))
+        });
         trouble.truncate(10);
 
         // Sessions: sort by date descending, take last 14 days

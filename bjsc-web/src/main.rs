@@ -592,11 +592,11 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                             view! {
                                 <div>
                                     {stats.trouble_spots.iter().map(|(idx, wrong, seen)| {
-                                        let pct = (1.0 - *wrong as f64 / *seen as f64) * 100.0;
+                                        let pct = *wrong as f64 / *seen as f64 * 100.0;
                                         view! {
                                             <div class="flex justify-between py-0.5 text-sm border-b border-gray-800">
                                                 <span class="text-red-400">{idx.clone()}</span>
-                                                <span>{format!("wrong {}/{} ({:.0}%)", wrong, seen, pct)}</span>
+                                                <span>{format!("{}/{} wrong ({:.0}%)", wrong, seen, pct)}</span>
                                             </div>
                                         }
                                     }).collect::<Vec<_>>()}
