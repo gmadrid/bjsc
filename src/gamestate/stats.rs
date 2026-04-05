@@ -12,10 +12,10 @@ pub struct Stats {
     pub soft_wrong: u32,
 
     pub split_count: u32,
-    pub splits_wrong: u32,
+    pub split_wrong: u32,
 
     pub double_count: u32,
-    pub doubles_wrong: u32,
+    pub double_wrong: u32,
 }
 
 impl Stats {
@@ -41,7 +41,7 @@ impl Stats {
             TableType::Split => {
                 self.split_count += 1;
                 if wrong {
-                    self.splits_wrong += 1;
+                    self.split_wrong += 1;
                 }
             }
         }
@@ -50,7 +50,7 @@ impl Stats {
         if action == Action::Double {
             self.double_count += 1;
             if wrong {
-                self.doubles_wrong += 1;
+                self.double_wrong += 1;
             }
         }
     }

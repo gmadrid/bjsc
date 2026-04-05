@@ -1,16 +1,8 @@
 use gloo_storage::{LocalStorage, Storage};
-use serde::{Deserialize, Serialize};
 
 const STORAGE_KEY: &str = "bjsc_auth";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthState {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub user_id: String,
-    #[serde(default)]
-    pub email: String,
-}
+pub type AuthState = bjsc::supabase::AuthSession;
 
 /// Check the URL hash for OAuth tokens (after Supabase redirect).
 /// Returns Some(AuthState) if tokens were found, and clears the hash.
@@ -86,21 +78,7 @@ pub async fn refresh_session(
     }
 
     let json: serde_json::Value = resp.json().await.ok()?;
-    let access_token = json.get("access_token")?.as_str()?.to_string();
-    let refresh_token = json
-        .get("refresh_token")
-        .and_then(|v| v.as_str())
-        .unwrap_or(&state.refresh_token)
-        .to_string();
-    let user_id = bjsc::supabase::user_id_from_jwt(&access_token)?;
-    let email = bjsc::supabase::email_from_jwt(&access_token).unwrap_or_default();
-
-    let new_state = AuthState {
-        access_token,
-        refresh_token,
-        user_id,
-        email,
-    };
+    let new_state = bjsc::supabase::parse_refresh_response(&json, &state.refresh_token)?;
     save_to_storage(&new_state);
     Some(new_state)
 }

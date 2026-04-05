@@ -56,34 +56,6 @@ impl Chart for SoftChart {
     }
 }
 
-// fn lookup(index: TableIndex) -> Result<ChartAction, ()> {
-//     if index.table_type() != TableType::Soft {
-//         return Err(());
-//     }
-//
-//     let row_index = index.row_index();
-//     let col_index = index.col_index();
-//
-//     lookup_total_by_index(row_index, col_index)
-// }
-
-// fn lookup_total_by_index(total: u8, col_index: ColIndex) -> Result<ChartAction, ()> {
-//     if !(13..=21).contains(&total) {
-//         dbg!(total);
-//         return Err(());
-//     }
-//
-//     let chart_index = as_chart_column(col_index);
-//     Ok(SOFT_CHART[(total - 13) as usize][chart_index])
-// }
-//
-// pub fn lookup_total(total: u8, dealer: Card) -> Result<ChartAction, ()> {
-//     dbg!(lookup_total_by_index(
-//         total,
-//         dbg!(ColIndex::new_with_card(dbg!(dealer)))?
-//     ))
-// }
-
 #[cfg(test)]
 mod test {
     use super::*;

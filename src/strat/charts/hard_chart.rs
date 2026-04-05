@@ -61,32 +61,6 @@ impl Chart for HardChart {
     }
 }
 
-// fn lookup(index: TableIndex) -> Result<ChartAction, ()> {
-//     if index.table_type() != TableType::Hard {
-//         return Err(());
-//     }
-//
-//     let row_index = index.row_index();
-//     let col_index = index.col_index();
-//     lookup_total_by_index(row_index, col_index)
-// }
-
-// fn lookup_total(total: u8, dealer: Card) -> BjResult<ChartAction> {
-//     lookup_total_by_index(total, ColIndex::new_with_card(dealer)?)
-// }
-//
-// fn lookup_total_by_index(total: u8, col_index: ColIndex) -> BjResult<ChartAction> {
-//     let chart_index = as_chart_column(col_index);
-//
-//     if total <= 8 {
-//         Ok(HARD_CHART[0][chart_index])
-//     } else if total >= 17 {
-//         Ok(HARD_CHART[9][chart_index])
-//     } else {
-//         Ok(HARD_CHART[(total - 8) as usize][chart_index])
-//     }
-// }
-
 #[cfg(test)]
 mod test {
     use super::*;

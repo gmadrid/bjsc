@@ -1,16 +1,8 @@
-use bjsc::supabase::{user_id_from_jwt, SupabaseConfig};
-use serde::{Deserialize, Serialize};
+use bjsc::supabase::{parse_refresh_response, user_id_from_jwt, SupabaseConfig};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthTokens {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub user_id: String,
-    #[serde(default)]
-    pub email: String,
-}
+pub type AuthTokens = bjsc::supabase::AuthSession;
 
 fn auth_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -75,21 +67,7 @@ pub fn refresh_tokens(
     }
 
     let json: serde_json::Value = rt.block_on(resp.json()).ok()?;
-    let access_token = json.get("access_token")?.as_str()?.to_string();
-    let refresh_token = json
-        .get("refresh_token")
-        .and_then(|v| v.as_str())
-        .unwrap_or(&tokens.refresh_token)
-        .to_string();
-    let user_id = user_id_from_jwt(&access_token)?;
-    let email = bjsc::supabase::email_from_jwt(&access_token).unwrap_or_default();
-
-    let new_tokens = AuthTokens {
-        access_token,
-        refresh_token,
-        user_id,
-        email,
-    };
+    let new_tokens = parse_refresh_response(&json, &tokens.refresh_token)?;
     save_tokens(&new_tokens);
     Some(new_tokens)
 }

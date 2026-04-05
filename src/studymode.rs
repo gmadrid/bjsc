@@ -28,6 +28,41 @@ impl StudyMode {
     pub fn is_constructed(&self) -> bool {
         !matches!(self, StudyMode::All)
     }
+
+    /// Stable short key for serialization/round-tripping (e.g., in HTML select elements).
+    pub fn key(&self) -> &'static str {
+        match self {
+            StudyMode::All => "all",
+            StudyMode::Hard => "hard",
+            StudyMode::Soft => "soft",
+            StudyMode::Splits => "splits",
+            StudyMode::Doubles => "doubles",
+            StudyMode::Drill => "drill",
+        }
+    }
+
+    /// Parse from the stable short key.
+    pub fn from_key(s: &str) -> Option<Self> {
+        match s {
+            "all" => Some(StudyMode::All),
+            "hard" => Some(StudyMode::Hard),
+            "soft" => Some(StudyMode::Soft),
+            "splits" => Some(StudyMode::Splits),
+            "doubles" => Some(StudyMode::Doubles),
+            "drill" => Some(StudyMode::Drill),
+            _ => None,
+        }
+    }
+
+    /// All variants in display order.
+    pub const ALL: [StudyMode; 6] = [
+        StudyMode::All,
+        StudyMode::Drill,
+        StudyMode::Hard,
+        StudyMode::Soft,
+        StudyMode::Splits,
+        StudyMode::Doubles,
+    ];
 }
 
 impl Display for StudyMode {

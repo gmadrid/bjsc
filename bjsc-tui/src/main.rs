@@ -4,8 +4,7 @@ mod auth;
 use auth::AuthTokens;
 use bjsc::card::Card;
 use bjsc::hand::Hand;
-use bjsc::supabase::SupabaseConfig;
-use bjsc::{persistence, Action, GameState, Stats};
+use bjsc::{persistence, Action, GameState, Stats, SupabaseConfig};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -20,14 +19,8 @@ use ratatui::Terminal;
 use std::io;
 use std::sync::mpsc;
 
-const SUPABASE_URL: &str = "https://pecwxusghnxlvzmfcqrj.supabase.co";
-const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY3d4dXNnaG54bHZ6bWZjcXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTY3MjUsImV4cCI6MjA5MDkzMjcyNX0.LwgaAHruQ8cA3mHrtCCB00WSqttpwRusAf0Y1WEFWuE";
-
 fn supabase_config() -> SupabaseConfig {
-    SupabaseConfig {
-        base_url: SUPABASE_URL.to_string(),
-        anon_key: SUPABASE_ANON_KEY.to_string(),
-    }
+    SupabaseConfig::default()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -241,36 +234,19 @@ impl App {
         };
 
         if let Some(result) = self.game_state.check_answer(action) {
-            // Capture log data before consuming fields
-            let answer_log_data = result.table_index_key.clone().map(|key| {
-                (
-                    key,
-                    result.correct,
-                    result.player_action.to_string(),
-                    result
-                        .correct_action
-                        .map(|a| a.to_string())
-                        .unwrap_or_default(),
-                )
-            });
+            let log_data = result.log_data();
 
             if result.correct {
-                self.status = StatusMessage::Correct(format!("Correct: {}", result.player_action));
+                self.status = StatusMessage::Correct(result.status_message());
             } else {
-                self.status = StatusMessage::Wrong(format!(
-                    "WRONG: {}",
-                    result
-                        .correct_action
-                        .map(|a| a.to_string())
-                        .unwrap_or_default()
-                ));
+                self.status = StatusMessage::Wrong(result.status_message());
                 if let Some(log_entry) = result.log_entry {
                     self.error_log.insert(0, log_entry);
                 }
             }
 
             self.save();
-            if let Some((key, was_correct, player_act, correct_act)) = answer_log_data {
+            if let Some((key, was_correct, player_act, correct_act)) = log_data {
                 self.log_answer(&key, was_correct, &player_act, &correct_act);
             }
 
@@ -642,7 +618,7 @@ fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
     let box_counts = app.game_state.box_counts();
     let unseen = app.game_state.unseen_count();
 
-    let intervals = ["20s", "1m", "5m", "30m", "2h", "6h", "1d", "3d", "1w"];
+    let intervals = bjsc::BOX_LABELS;
     let colors = [
         Color::LightRed,
         Color::Red,
@@ -1093,8 +1069,8 @@ fn draw_stats(f: &mut ratatui::Frame, area: Rect, stats: &Stats, summary: &bjsc:
     let categories = [
         ("Hard: ", stats.hard_count, stats.hard_wrong),
         ("Soft: ", stats.soft_count, stats.soft_wrong),
-        ("Split: ", stats.split_count, stats.splits_wrong),
-        ("Dbl: ", stats.double_count, stats.doubles_wrong),
+        ("Split: ", stats.split_count, stats.split_wrong),
+        ("Dbl: ", stats.double_count, stats.double_wrong),
     ];
 
     for (i, (label, count, wrong)) in categories.iter().enumerate() {

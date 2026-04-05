@@ -24,17 +24,19 @@ fn indices_for_type(tt: TableType) -> Vec<TableIndex> {
     result
 }
 
+/// All indices across hard, soft, and split tables.
+fn all_indices() -> Vec<TableIndex> {
+    let mut all = Vec::new();
+    all.extend(indices_for_type(TableType::Hard));
+    all.extend(indices_for_type(TableType::Soft));
+    all.extend(indices_for_type(TableType::Split));
+    all
+}
+
 /// Get all valid TableIndex cells for a study mode.
 pub fn indices_for_mode(mode: StudyMode) -> Vec<TableIndex> {
     match mode {
-        StudyMode::All => {
-            // All modes combined
-            let mut all = Vec::new();
-            all.extend(indices_for_type(TableType::Hard));
-            all.extend(indices_for_type(TableType::Soft));
-            all.extend(indices_for_type(TableType::Split));
-            all
-        }
+        StudyMode::All | StudyMode::Drill => all_indices(),
         StudyMode::Hard => indices_for_type(TableType::Hard),
         StudyMode::Soft => indices_for_type(TableType::Soft),
         StudyMode::Splits => indices_for_type(TableType::Split),
@@ -51,14 +53,6 @@ pub fn indices_for_mode(mode: StudyMode) -> Vec<TableIndex> {
                 }
             }
             result
-        }
-        StudyMode::Drill => {
-            // Drill uses all questions
-            let mut all = Vec::new();
-            all.extend(indices_for_type(TableType::Hard));
-            all.extend(indices_for_type(TableType::Soft));
-            all.extend(indices_for_type(TableType::Split));
-            all
         }
     }
 }

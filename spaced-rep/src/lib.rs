@@ -17,6 +17,10 @@ const INTERVALS: [u64; NUM_BOXES as usize] = [
     604_800, // Box 8: 1 week
 ];
 
+/// Human-readable labels for each box interval.
+pub const BOX_LABELS: [&str; NUM_BOXES as usize] =
+    ["20s", "1m", "5m", "30m", "2h", "6h", "1d", "3d", "1w"];
+
 #[cfg(not(target_arch = "wasm32"))]
 fn now_secs() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};

@@ -2,11 +2,23 @@ use crate::studymode::StudyMode;
 use serde::{Deserialize, Serialize};
 use spaced_rep::Deck;
 
+pub const SUPABASE_URL: &str = "https://pecwxusghnxlvzmfcqrj.supabase.co";
+pub const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY3d4dXNnaG54bHZ6bWZjcXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTY3MjUsImV4cCI6MjA5MDkzMjcyNX0.LwgaAHruQ8cA3mHrtCCB00WSqttpwRusAf0Y1WEFWuE";
+
 /// Supabase project configuration.
 #[derive(Debug, Clone)]
 pub struct SupabaseConfig {
     pub base_url: String,
     pub anon_key: String,
+}
+
+impl Default for SupabaseConfig {
+    fn default() -> Self {
+        Self {
+            base_url: SUPABASE_URL.to_string(),
+            anon_key: SUPABASE_ANON_KEY.to_string(),
+        }
+    }
 }
 
 /// Matches the `user_deck` table schema.
@@ -160,19 +172,48 @@ pub struct AnswerLogEntry {
 
 /// Build a request to call the coaching edge function.
 pub fn coaching_request(config: &SupabaseConfig, access_token: &str) -> RequestDetails {
+    let mut headers = common_headers(config, access_token);
+    headers.push(("Content-Type".to_string(), "application/json".to_string()));
+
     RequestDetails {
         url: format!("{}/functions/v1/coaching", config.base_url),
         method: "POST".to_string(),
-        headers: vec![
-            ("apikey".to_string(), config.anon_key.clone()),
-            (
-                "Authorization".to_string(),
-                format!("Bearer {}", access_token),
-            ),
-            ("Content-Type".to_string(), "application/json".to_string()),
-        ],
+        headers,
         body: Some("{}".to_string()),
     }
+}
+
+/// Authenticated session data shared across frontends.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthSession {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub user_id: String,
+    #[serde(default)]
+    pub email: String,
+}
+
+/// Parse a token-refresh JSON response into an AuthSession.
+/// The `old_refresh_token` is used as a fallback if the response doesn't include a new one.
+pub fn parse_refresh_response(
+    json: &serde_json::Value,
+    old_refresh_token: &str,
+) -> Option<AuthSession> {
+    let access_token = json.get("access_token")?.as_str()?.to_string();
+    let refresh_token = json
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or(old_refresh_token)
+        .to_string();
+    let user_id = user_id_from_jwt(&access_token)?;
+    let email = email_from_jwt(&access_token).unwrap_or_default();
+
+    Some(AuthSession {
+        access_token,
+        refresh_token,
+        user_id,
+        email,
+    })
 }
 
 /// Decode the JWT payload as a JSON Value.

@@ -2,16 +2,12 @@ mod api;
 mod auth;
 
 use auth::AuthState;
-use bjsc::supabase::SupabaseConfig;
-use bjsc::{Action, GameState, Stats};
+use bjsc::{Action, GameState, Stats, SupabaseConfig};
 use leptos::prelude::*;
 use spaced_rep::NUM_BOXES;
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-
-const SUPABASE_URL: &str = "https://pecwxusghnxlvzmfcqrj.supabase.co";
-const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY3d4dXNnaG54bHZ6bWZjcXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTY3MjUsImV4cCI6MjA5MDkzMjcyNX0.LwgaAHruQ8cA3mHrtCCB00WSqttpwRusAf0Y1WEFWuE";
 
 thread_local! {
     static GAME: RefCell<GameState> = RefCell::new({
@@ -22,10 +18,7 @@ thread_local! {
 }
 
 fn supabase_config() -> SupabaseConfig {
-    SupabaseConfig {
-        base_url: SUPABASE_URL.to_string(),
-        anon_key: SUPABASE_ANON_KEY.to_string(),
-    }
+    SupabaseConfig::default()
 }
 
 fn main() {
@@ -41,7 +34,6 @@ struct DisplayData {
     soft: String,
     split: String,
     double: String,
-    mode: String,
     box_counts: [u32; NUM_BOXES as usize],
     unseen: u32,
     new_count: u32,
@@ -53,33 +45,21 @@ struct DisplayData {
 fn read_display() -> DisplayData {
     GAME.with_borrow(|gs| {
         let s = gs.stats();
+        let ds = gs.deck_summary();
         DisplayData {
             dealer: gs.dealer_hand().to_string(),
             player: gs.player_hand().to_string(),
             score: Stats::numbers_string(s.question_count, s.questions_wrong),
             hard: Stats::numbers_string(s.hard_count, s.hard_wrong),
             soft: Stats::numbers_string(s.soft_count, s.soft_wrong),
-            split: Stats::numbers_string(s.split_count, s.splits_wrong),
-            double: Stats::numbers_string(s.double_count, s.doubles_wrong),
-            mode: gs.study_mode().to_string(),
+            split: Stats::numbers_string(s.split_count, s.split_wrong),
+            double: Stats::numbers_string(s.double_count, s.double_wrong),
             box_counts: gs.box_counts(),
             unseen: gs.unseen_count(),
-            new_count: {
-                let ds = gs.deck_summary();
-                ds.unasked
-            },
-            weak_count: {
-                let ds = gs.deck_summary();
-                ds.weak
-            },
-            mastered_count: {
-                let ds = gs.deck_summary();
-                ds.mastered
-            },
-            due_count: {
-                let ds = gs.deck_summary();
-                ds.due
-            },
+            new_count: ds.unasked,
+            weak_count: ds.weak,
+            mastered_count: ds.mastered,
+            due_count: ds.due,
         }
     })
 }
@@ -94,7 +74,6 @@ fn push_display(
     soft_stat: RwSignal<String>,
     split_stat: RwSignal<String>,
     double_stat: RwSignal<String>,
-    mode_text: RwSignal<String>,
 ) {
     dealer.set(data.dealer.clone());
     player.set(data.player.clone());
@@ -103,7 +82,6 @@ fn push_display(
     soft_stat.set(data.soft.clone());
     split_stat.set(data.split.clone());
     double_stat.set(data.double.clone());
-    mode_text.set(data.mode.clone());
 }
 
 /// Log an answer to Supabase (fire-and-forget).
@@ -162,7 +140,7 @@ fn App() -> impl IntoView {
 
 #[component]
 fn LoginView() -> impl IntoView {
-    let login_url = auth::google_login_url(SUPABASE_URL);
+    let login_url = auth::google_login_url(bjsc::supabase::SUPABASE_URL);
 
     view! {
         <div class="flex flex-col items-center justify-center pt-24 gap-8">
@@ -187,7 +165,6 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let soft_stat = RwSignal::new(String::new());
     let split_stat = RwSignal::new(String::new());
     let double_stat = RwSignal::new(String::new());
-    let mode_text = RwSignal::new(String::new());
     let status_text = RwSignal::new(String::new());
     let status_is_error = RwSignal::new(false);
     let status_visible = RwSignal::new(false);
@@ -217,7 +194,6 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             soft_stat,
             split_stat,
             double_stat,
-            mode_text,
         );
         box_counts.set(data.box_counts);
         unseen_count.set(data.unseen);
@@ -278,30 +254,10 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             (result, shoe_done)
         });
         if let (Some(result), shoe_done) = outcome {
-            // Capture log data before consuming fields
-            let answer_log_data = result.table_index_key.clone().map(|key| {
-                (
-                    key,
-                    result.correct,
-                    result.player_action.to_string(),
-                    result
-                        .correct_action
-                        .map(|a| a.to_string())
-                        .unwrap_or_default(),
-                )
-            });
-            if result.correct {
-                status_text.set(format!("Correct: {}", result.player_action));
-                status_is_error.set(false);
-            } else {
-                status_text.set(format!(
-                    "WRONG: {}",
-                    result
-                        .correct_action
-                        .map(|a| a.to_string())
-                        .unwrap_or_default()
-                ));
-                status_is_error.set(true);
+            let log_data = result.log_data();
+            status_text.set(result.status_message());
+            status_is_error.set(!result.correct);
+            if !result.correct {
                 if let Some(entry) = result.log_entry {
                     errors.update(|e| e.insert(0, entry));
                 }
@@ -314,7 +270,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             // Save to cloud and log answer
             if let Some(auth) = auth_state.get_untracked() {
                 save_to_cloud(&auth);
-                if let Some((key, was_correct, player_act, correct_act)) = answer_log_data {
+                if let Some((key, was_correct, player_act, correct_act)) = log_data {
                     log_answer_to_cloud(&auth, &key, was_correct, &player_act, &correct_act);
                 }
             }
@@ -435,33 +391,19 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                     class:hidden=move || screen.get() != 0
                     on:change=move |ev| {
                         let val = leptos::prelude::event_target_value(&ev);
-                        let mode = match val.as_str() {
-                            "all" => bjsc::StudyMode::All,
-                            "drill" => bjsc::StudyMode::Drill,
-                            "hard" => bjsc::StudyMode::Hard,
-                            "soft" => bjsc::StudyMode::Soft,
-                            "splits" => bjsc::StudyMode::Splits,
-                            "doubles" => bjsc::StudyMode::Doubles,
-                            _ => return,
-                        };
-                        set_mode(mode);
+                        if let Some(mode) = bjsc::StudyMode::from_key(&val) {
+                            set_mode(mode);
+                        }
                     }
-                    prop:value=move || match mode_text.get().as_str() {
-                        "All (from shoe)" => "all",
-                        "Drill (spaced rep)" => "drill",
-                        "Hard Totals" => "hard",
-                        "Soft Totals" => "soft",
-                        "Splits" => "splits",
-                        "Doubles" => "doubles",
-                        _ => "all",
+                    prop:value=move || {
+                        GAME.with_borrow(|gs| gs.study_mode().key().to_string())
                     }
                 >
-                    <option value="all">"All (from shoe)"</option>
-                    <option value="drill">"Drill (spaced rep)"</option>
-                    <option value="hard">"Hard Totals"</option>
-                    <option value="soft">"Soft Totals"</option>
-                    <option value="splits">"Splits"</option>
-                    <option value="doubles">"Doubles"</option>
+                    {bjsc::StudyMode::ALL.iter().map(|m| {
+                        let key = m.key();
+                        let label = m.to_string();
+                        view! { <option value={key}>{label}</option> }
+                    }).collect::<Vec<_>>()}
                 </select>
                 // Hamburger menu button (right side)
                 <button
@@ -533,7 +475,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                     {move || {
                         let counts = box_counts.get();
                         let max_val = counts.iter().copied().max().unwrap_or(1).max(1);
-                        let labels = ["20s", "1m", "5m", "30m", "2h", "6h", "1d", "3d", "1w"];
+                        let labels = bjsc::BOX_LABELS;
                         let colors = ["#ff6b6b", "#e03131", "#ffd43b", "#fab005", "#66d9e8", "#22b8cf", "#4dabf7", "#51cf66", "#8ce99a"];
 
                         counts.iter().enumerate().map(|(i, &count)| {

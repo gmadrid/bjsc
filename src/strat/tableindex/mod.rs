@@ -64,26 +64,3 @@ impl FromStr for TableIndex {
         Ok(TableIndex::new(row, col))
     }
 }
-
-#[cfg(test)]
-mod test {
-    // use super::*;
-
-    // #[test]
-    // fn test_new_table_index() {
-    //     let row = "hard:5".parse::<RowIndex>().unwrap();
-    //     let col = "6".parse::<ColIndex>().unwrap();
-    //
-    //     let index = TableIndex::new(row, col).unwrap();
-    //     assert_eq!(TableIndex { row, col }, index);
-    // }
-    //
-    // #[test]
-    // fn test_parse() {
-    //     let row = "hard:5".parse::<RowIndex>().unwrap();
-    //     let col = "6".parse::<ColIndex>().unwrap();
-    //
-    //     let index = TableIndex::new(row, col).unwrap();
-    //     assert_eq!(index, "hard:5,6".parse().unwrap());
-    // }
-}

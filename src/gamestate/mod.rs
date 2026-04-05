@@ -28,6 +28,36 @@ pub struct AnswerResult {
     pub table_index_key: Option<String>,
 }
 
+impl AnswerResult {
+    /// Format a user-facing status message.
+    pub fn status_message(&self) -> String {
+        if self.correct {
+            format!("Correct: {}", self.player_action)
+        } else {
+            format!(
+                "WRONG: {}",
+                self.correct_action
+                    .map(|a| a.to_string())
+                    .unwrap_or_default()
+            )
+        }
+    }
+
+    /// Extract answer log data: (table_index_key, correct, player_action, correct_action).
+    pub fn log_data(&self) -> Option<(String, bool, String, String)> {
+        self.table_index_key.clone().map(|key| {
+            (
+                key,
+                self.correct,
+                self.player_action.to_string(),
+                self.correct_action
+                    .map(|a| a.to_string())
+                    .unwrap_or_default(),
+            )
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct GameState {
     shoe: Shoe,
