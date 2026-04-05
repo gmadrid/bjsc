@@ -154,6 +154,12 @@ pub enum Suit {
     Clubs,
 }
 
+impl Suit {
+    pub fn is_red(&self) -> bool {
+        matches!(self, Suit::Hearts | Suit::Diamonds)
+    }
+}
+
 impl TryFrom<u8> for Suit {
     type Error = BjError;
 
@@ -171,10 +177,10 @@ impl TryFrom<u8> for Suit {
 impl Display for Suit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            Suit::Spades => "S",
-            Suit::Hearts => "H",
-            Suit::Diamonds => "D",
-            Suit::Clubs => "C",
+            Suit::Spades => "♠",
+            Suit::Hearts => "♥",
+            Suit::Diamonds => "♦",
+            Suit::Clubs => "♣",
         };
         write!(f, "{}", str)
     }

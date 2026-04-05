@@ -1,5 +1,5 @@
 [workspace]
-members = ["bjsc-tui", "bjsc-web"]
+members = ["bjsc-tui", "bjsc-web", "spaced-rep"]
 resolver = "2"
 
 [package]
@@ -11,6 +11,7 @@ edition = "2021"
 
 [dependencies]
 itertools = "0.14.0"
+spaced-rep = { path = "spaced-rep" }
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }
 toml = "0.8.19"

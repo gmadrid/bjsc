@@ -1,11 +1,28 @@
 use crate::hand::Hand;
+use crate::hand_builder::build_hand_for_index;
 use crate::shoe::Shoe;
-use crate::strat::{lookup_action, ChartAction, TableIndex};
+use crate::strat::{lookup_action, phrase_for_row, Action, ChartAction, TableIndex};
+use crate::studymode::StudyMode;
+use crate::table_index_keys::{indices_for_mode, keys_for_mode, table_index_to_key};
 use crate::BjResult;
+use rand::prelude::*;
+use spaced_rep::Deck;
 
-mod stats;
+pub mod stats;
+use stats::Stats;
 
 const NUM_DECKS: usize = 6;
+
+/// Result of checking a player's answer.
+pub struct AnswerResult {
+    pub correct: bool,
+    pub correct_action: Option<Action>,
+    pub player_action: Action,
+    /// Error log entry for wrong answers.
+    pub log_entry: Option<String>,
+    /// The TableIndex of the question (for spaced rep tracking).
+    pub table_index: Option<TableIndex>,
+}
 
 #[derive(Debug)]
 pub struct GameState {
@@ -13,13 +30,9 @@ pub struct GameState {
     player_hand: Hand,
     dealer_hand: Hand,
 
-    num_questions: usize,
-    num_wrong: usize,
-}
-
-pub enum GameMode {
-    Playing,
-    Done,
+    study_mode: StudyMode,
+    stats: Stats,
+    deck: Deck,
 }
 
 impl GameState {
@@ -31,34 +44,35 @@ impl GameState {
             shoe,
             player_hand: Default::default(),
             dealer_hand: Default::default(),
-            num_questions: 0,
-            num_wrong: 0,
+            study_mode: StudyMode::default(),
+            stats: Stats::default(),
+            deck: Deck::new(),
         }
     }
 
-    pub fn num_questions_asked(&self) -> usize {
-        self.num_questions
+    pub fn stats(&self) -> &Stats {
+        &self.stats
     }
 
-    pub fn num_questions_wrong(&self) -> usize {
-        self.num_wrong
+    pub fn study_mode(&self) -> StudyMode {
+        self.study_mode
     }
 
-    pub fn answered_right(&mut self) {
-        self.num_questions += 1;
+    pub fn set_study_mode(&mut self, mode: StudyMode) {
+        self.study_mode = mode;
     }
 
-    pub fn answered_wrong(&mut self) {
-        self.num_wrong += 1;
-        self.num_questions += 1;
+    pub fn deck(&self) -> &Deck {
+        &self.deck
     }
 
-    pub fn mode(&self) -> GameMode {
-        if self.shoe.is_done() {
-            GameMode::Done
-        } else {
-            GameMode::Playing
-        }
+    pub fn deck_summary(&self) -> spaced_rep::DeckSummary {
+        let keys = keys_for_mode(self.study_mode);
+        self.deck.summary(&keys)
+    }
+
+    pub fn set_deck(&mut self, deck: Deck) {
+        self.deck = deck;
     }
 
     pub fn chart_action(&self) -> BjResult<(ChartAction, Option<TableIndex>)> {
@@ -73,34 +87,117 @@ impl GameState {
         &self.player_hand
     }
 
-    pub fn new_hands(&mut self) {
-        self.dealer_hand = Default::default();
-        self.player_hand = Default::default();
+    /// Check the player's answer and update all state (stats, spaced rep).
+    pub fn check_answer(&mut self, action: Action) -> Option<AnswerResult> {
+        let (chart_action, table_index) = self.chart_action().ok()?;
+        let correct_action = chart_action.apply_rules()?;
+        let correct = action == correct_action;
+
+        // Update stats
+        if let Some(ref ti) = table_index {
+            self.stats.count(!correct, correct_action, ti);
+
+            // Update spaced rep
+            let key = table_index_to_key(ti);
+            self.deck.record(&key, correct);
+        }
+
+        let log_entry = if !correct {
+            if let Some(ref ti) = table_index {
+                Some(format!(
+                    "{} (P: {}, D: {})",
+                    phrase_for_row(ti.row),
+                    self.player_hand,
+                    self.dealer_hand
+                ))
+            } else {
+                Some(format!(
+                    "P: {}, D: {}, Correct: {}, Guess: {}",
+                    self.player_hand, self.dealer_hand, correct_action, action
+                ))
+            }
+        } else {
+            None
+        };
+
+        Some(AnswerResult {
+            correct,
+            correct_action: Some(correct_action),
+            player_action: action,
+            log_entry,
+            table_index,
+        })
     }
 
     pub fn shuffle(&mut self) {
         self.shoe.shuffle();
     }
 
-    // Returns false if the shoe is done.
+    /// Deal the next hand based on the current study mode.
+    /// Returns false if the shoe is done (only relevant for All mode).
     pub fn deal_a_hand(&mut self) -> bool {
-        if self.shoe.is_done() {
-            return false;
+        match self.study_mode {
+            StudyMode::All => self.deal_from_shoe(),
+            StudyMode::Drill => self.deal_drill(),
+            _ => self.deal_category(),
         }
+    }
 
-        let mut succeeded = false;
-        if let Some(p1) = self.shoe.deal() {
-            if let Some(d1) = self.shoe.deal() {
-                if let Some(p2) = self.shoe.deal() {
-                    succeeded = true;
-                    self.new_hands();
-                    self.player_hand.add_card(p1);
-                    self.player_hand.add_card(p2);
-                    self.dealer_hand.add_card(d1);
+    /// Deal from the shoe (original behavior). Skips naturals (blackjack).
+    fn deal_from_shoe(&mut self) -> bool {
+        loop {
+            if self.shoe.is_done() {
+                return false;
+            }
+
+            if let (Some(p1), Some(d1), Some(p2)) =
+                (self.shoe.deal(), self.shoe.deal(), self.shoe.deal())
+            {
+                self.player_hand = Hand::default();
+                self.dealer_hand = Hand::default();
+                self.player_hand.add_card(p1);
+                self.player_hand.add_card(p2);
+                self.dealer_hand.add_card(d1);
+
+                // Skip naturals — no decision to make
+                if self.player_hand.is_natural() {
+                    continue;
                 }
+                return true;
+            } else {
+                return false;
             }
         }
-        succeeded
+    }
+
+    /// Deal a constructed hand for a category study mode.
+    fn deal_category(&mut self) -> bool {
+        let indices = indices_for_mode(self.study_mode);
+        if indices.is_empty() {
+            return false;
+        }
+        let idx = &indices[thread_rng().gen_range(0..indices.len())];
+        let (player, dealer) = build_hand_for_index(idx);
+        self.player_hand = player;
+        self.dealer_hand = dealer;
+        true
+    }
+
+    /// Deal based on spaced repetition selection.
+    fn deal_drill(&mut self) -> bool {
+        let keys = keys_for_mode(StudyMode::Drill);
+        if keys.is_empty() {
+            return false;
+        }
+        let key = self.deck.next_item(&keys).unwrap_or(&keys[0]);
+        if let Ok(idx) = key.parse::<TableIndex>() {
+            let (player, dealer) = build_hand_for_index(&idx);
+            self.player_hand = player;
+            self.dealer_hand = dealer;
+            true
+        } else {
+            false
+        }
     }
 }
 

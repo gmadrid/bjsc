@@ -44,7 +44,7 @@ impl Display for TableType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             TableType::Hard => "hard",
-            TableType::Soft => "sort",
+            TableType::Soft => "soft",
             TableType::Split => "split",
             TableType::Surrender => "surrender",
         };

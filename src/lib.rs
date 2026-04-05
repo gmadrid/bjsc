@@ -1,14 +1,22 @@
 mod bjerror;
-mod card;
+pub mod card;
 mod gamestate;
-mod hand;
+pub mod hand;
 mod shoe;
 mod strat;
 
-mod leitner;
+mod hand_builder;
+pub mod persistence;
+mod studymode;
+mod table_index_keys;
 
 pub use bjerror::*;
-pub use gamestate::GameState;
+pub use gamestate::stats::Stats;
+pub use gamestate::{AnswerResult, GameState};
 pub use hand::Hand;
-pub use leitner::LeitnerState;
-pub use strat::{phrase_for_row, Action};
+pub use hand_builder::build_hand_for_index;
+pub use persistence::SavedState;
+pub use spaced_rep::DeckSummary;
+pub use strat::{phrase_for_row, Action, ChartAction, TableIndex, TableType};
+pub use studymode::StudyMode;
+pub use table_index_keys::{indices_for_mode, keys_for_mode};

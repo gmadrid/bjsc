@@ -6,7 +6,7 @@ use crate::strat::ChartAction::NoAc;
 use crate::{BjError, BjResult, Hand};
 
 // Standard Basic Strategy Soft Totals from BJA
-const SOFT_CHART: [[ChartAction; 10]; 9] = [
+pub(crate) const SOFT_CHART: [[ChartAction; 10]; 9] = [
     /* 13 (A, 2) */
     [Hit_, Hit_, Hit_, DblH, DblH, Hit_, Hit_, Hit_, Hit_, Hit_],
     /* 14 (A, 3) */

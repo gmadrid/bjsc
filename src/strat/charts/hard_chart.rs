@@ -4,7 +4,7 @@ use crate::strat::tableindex::{new_table_index, ColIndex, RowIndex, TableIndex, 
 use crate::{BjError, BjResult, Hand};
 
 // Standard Basic Strategy Hard Totals from BJA
-const HARD_CHART: [[ChartAction; 10]; 10] = [
+pub(crate) const HARD_CHART: [[ChartAction; 10]; 10] = [
     /* 8 and lower */
     [Hit_, Hit_, Hit_, Hit_, Hit_, Hit_, Hit_, Hit_, Hit_, Hit_],
     /* 9 */

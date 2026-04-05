@@ -43,10 +43,7 @@ impl ChartAction {
             ChartAction::Stnd => Some(Action::Stand),
             ChartAction::Splt => Some(Action::Split),
             ChartAction::SDas => Some(Action::Split),
-            _ => {
-                println!("CAN'T APPLY RULES: {:?}", self);
-                None
-            }
+            _ => None,
         }
     }
 }
@@ -84,6 +81,42 @@ pub fn lookup_action(
         SoftChart::lookup_action(player_hand, dealer_hand)
     } else {
         HardChart::lookup_action(player_hand, dealer_hand)
+    }
+}
+
+/// Look up the ChartAction for a given TableIndex directly (without needing actual hands).
+pub fn lookup_by_index(index: &TableIndex) -> BjResult<ChartAction> {
+    let col = index.col_index();
+    let chart_col = as_chart_column(col);
+    let row = index.row_index();
+
+    match index.table_type() {
+        crate::strat::TableType::Hard => {
+            let chart_row = if row <= 8 {
+                0
+            } else if row >= 17 {
+                9
+            } else {
+                (row - 8) as usize
+            };
+            Ok(hard_chart::HARD_CHART[chart_row][chart_col])
+        }
+        crate::strat::TableType::Soft => {
+            if !(13..=21).contains(&row) {
+                return Err(crate::BjError::ValueOutOfRange(row, 13, 21));
+            }
+            Ok(soft_chart::SOFT_CHART[(row - 13) as usize][chart_col])
+        }
+        crate::strat::TableType::Split => {
+            if !(1..=10).contains(&row) {
+                return Err(crate::BjError::ValueOutOfRange(row, 1, 10));
+            }
+            Ok(split_chart::SPLIT_CHART[(row - 1) as usize][chart_col])
+        }
+        crate::strat::TableType::Surrender => {
+            // Surrender chart is stubbed — always NoAc
+            Ok(ChartAction::NoAc)
+        }
     }
 }
 

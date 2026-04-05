@@ -11,7 +11,7 @@ use crate::{BjError, BjResult, Hand};
 // Note that the rows are _not_ zero-indexed.
 // Note that the Row and Col indices are in a different order.
 // Our code is the same as the layout of the Chart on the BJA site.
-const SPLIT_CHART: [[ChartAction; 10]; 10] = [
+pub(crate) const SPLIT_CHART: [[ChartAction; 10]; 10] = [
     /*  2 (A, A) */
     [Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt, Splt],
     /*  4 (2, 2) */

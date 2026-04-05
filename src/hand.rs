@@ -24,6 +24,11 @@ impl Hand {
         self.cards.first().copied()
     }
 
+    /// A natural blackjack: exactly two cards totaling 21.
+    pub fn is_natural(&self) -> bool {
+        self.cards.len() == 2 && self.total == 21
+    }
+
     pub fn splittable(&self) -> bool {
         if self.cards.len() != 2 {
             false
