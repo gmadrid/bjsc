@@ -482,9 +482,9 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             </div>
 
             // Keyboard hint
-            <div class="flex justify-between text-gray-600 text-xs py-4">
-                <span>"Keyboard: h / s / d / p / m (mode) / Tab (stats)"</span>
-                <span>{env!("BUILD_TIME")}</span>
+            <div class="flex justify-between text-xs py-4">
+                <span class="text-gray-400">"Keyboard: h / s / d / p / m (mode) / Tab (stats)"</span>
+                <span class="text-gray-600">{env!("BUILD_TIME")}</span>
             </div>
         </div>
     }
