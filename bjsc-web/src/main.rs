@@ -331,10 +331,9 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         sync_all();
     };
 
-    let cycle_mode = move || {
+    let set_mode = move |mode: bjsc::StudyMode| {
         GAME.with_borrow_mut(|gs| {
-            let new_mode = gs.study_mode().next();
-            gs.set_study_mode(new_mode);
+            gs.set_study_mode(mode);
             gs.deal_a_hand();
         });
         status_visible.set(false);
@@ -406,10 +405,6 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 }
                 return;
             }
-            if key == "m" {
-                cycle_mode();
-                return;
-            }
             if let Some(ch) = key.chars().next() {
                 if let Some(action) = Action::from_key(ch) {
                     do_action(action);
@@ -434,13 +429,41 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         <div class:hidden=move || loading.get()>
             // Mode bar
             <div class="flex items-center gap-4 mb-4 py-2 border-b border-gray-700">
-                <span class="font-bold text-gray-400">"Mode: "</span>
-                <span class="font-bold text-amber-300">{move || mode_text.get()}</span>
-                <button
-                    class="text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
+                <label class="font-bold text-gray-400" for="mode-select">"Mode: "</label>
+                <select
+                    id="mode-select"
+                    class="text-sm px-2 py-1 border border-gray-600 rounded bg-slate-800 text-amber-300 font-bold cursor-pointer hover:border-cyan-400 focus:border-cyan-400 focus:outline-none"
                     class:hidden=move || screen.get() != 0
-                    on:click=move |_| cycle_mode()
-                >"(M) Next"</button>
+                    on:change=move |ev| {
+                        let val = leptos::prelude::event_target_value(&ev);
+                        let mode = match val.as_str() {
+                            "all" => bjsc::StudyMode::All,
+                            "drill" => bjsc::StudyMode::Drill,
+                            "hard" => bjsc::StudyMode::Hard,
+                            "soft" => bjsc::StudyMode::Soft,
+                            "splits" => bjsc::StudyMode::Splits,
+                            "doubles" => bjsc::StudyMode::Doubles,
+                            _ => return,
+                        };
+                        set_mode(mode);
+                    }
+                    prop:value=move || match mode_text.get().as_str() {
+                        "All (from shoe)" => "all",
+                        "Drill (spaced rep)" => "drill",
+                        "Hard Totals" => "hard",
+                        "Soft Totals" => "soft",
+                        "Splits" => "splits",
+                        "Doubles" => "doubles",
+                        _ => "all",
+                    }
+                >
+                    <option value="all">"All (from shoe)"</option>
+                    <option value="drill">"Drill (spaced rep)"</option>
+                    <option value="hard">"Hard Totals"</option>
+                    <option value="soft">"Soft Totals"</option>
+                    <option value="splits">"Splits"</option>
+                    <option value="doubles">"Doubles"</option>
+                </select>
                 <button
                     class="ml-auto text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
                     on:click=cycle_screen
@@ -677,7 +700,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
 
             // Keyboard hint
             <div class="flex justify-between text-xs py-4">
-                <span class="text-gray-400">"Keyboard: h / s / d / p / m (mode) / Tab (stats)"</span>
+                <span class="text-gray-400">"Keyboard: h / s / d / p / Tab (stats)"</span>
                 <span class="text-gray-600">{env!("BUILD_TIME")}</span>
             </div>
         </div>
