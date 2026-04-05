@@ -53,16 +53,29 @@ struct App {
 }
 
 impl App {
-    fn new(auth: Option<AuthTokens>, rt: tokio::runtime::Runtime) -> Self {
+    fn new(mut auth: Option<AuthTokens>, rt: tokio::runtime::Runtime) -> Self {
         let saved = persistence::load_state();
         let mut game_state = GameState::default();
         game_state.set_deck(saved.deck);
         game_state.set_study_mode(saved.mode);
 
-        // If authenticated, try to load from cloud
-        if let Some(ref auth) = auth {
+        // If authenticated, try to load from cloud (refresh token if needed)
+        if let Some(ref mut auth) = auth {
             let config = supabase_config();
-            if let Ok(Some(row)) = rt.block_on(api::fetch_user_deck(&config, &auth.access_token)) {
+            let result = rt.block_on(api::fetch_user_deck(&config, &auth.access_token));
+            let result = if result.is_err() {
+                // Try refreshing the token
+                if let Some(new_auth) = auth::refresh_tokens(&config, auth, &rt) {
+                    let r = rt.block_on(api::fetch_user_deck(&config, &new_auth.access_token));
+                    *auth = new_auth;
+                    r
+                } else {
+                    result
+                }
+            } else {
+                result
+            };
+            if let Ok(Some(row)) = result {
                 game_state.set_deck(row.deck);
                 game_state.set_study_mode(row.study_mode);
             }
@@ -148,7 +161,7 @@ impl App {
         }
     }
 
-    fn save(&self) {
+    fn save(&mut self) {
         // Save locally
         persistence::save_state(&bjsc::SavedState {
             mode: self.game_state.study_mode(),
@@ -158,13 +171,27 @@ impl App {
         // Sync to cloud if authenticated
         if let Some(ref auth) = self.auth {
             let config = supabase_config();
-            let _ = self.rt.block_on(api::upsert_user_deck(
+            let result = self.rt.block_on(api::upsert_user_deck(
                 &config,
                 &auth.access_token,
                 &auth.user_id,
                 self.game_state.study_mode(),
                 self.game_state.deck(),
             ));
+
+            // If save failed, try refreshing the token and retry
+            if result.is_err() {
+                if let Some(new_auth) = auth::refresh_tokens(&config, auth, &self.rt) {
+                    let _ = self.rt.block_on(api::upsert_user_deck(
+                        &config,
+                        &new_auth.access_token,
+                        &new_auth.user_id,
+                        self.game_state.study_mode(),
+                        self.game_state.deck(),
+                    ));
+                    self.auth = Some(new_auth);
+                }
+            }
         }
     }
 }

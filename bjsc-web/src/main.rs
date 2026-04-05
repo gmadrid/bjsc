@@ -172,13 +172,32 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         unseen_count.set(data.unseen);
     };
 
-    // Load deck from Supabase on mount
+    // Load deck from Supabase on mount, refreshing token if needed
     {
         let auth = auth_state.get_untracked().unwrap();
         let config = supabase_config();
-        let token = auth.access_token.clone();
         leptos::task::spawn_local(async move {
-            if let Ok(Some(row)) = api::fetch_user_deck(&config, &token).await {
+            let mut token = auth.access_token.clone();
+
+            // Try to fetch; if it fails, attempt token refresh
+            let result = api::fetch_user_deck(&config, &token).await;
+            let result = if result.is_err() {
+                if let Some(new_auth) = auth::refresh_session(&config, &auth).await {
+                    token = new_auth.access_token.clone();
+                    auth_state.set(Some(new_auth));
+                    api::fetch_user_deck(&config, &token).await
+                } else {
+                    // Refresh failed — clear auth and force re-login
+                    auth::clear_storage();
+                    auth_state.set(None);
+                    loading.set(false);
+                    return;
+                }
+            } else {
+                result
+            };
+
+            if let Ok(Some(row)) = result {
                 GAME.with_borrow_mut(|gs| {
                     gs.set_deck(row.deck);
                     gs.set_study_mode(row.study_mode);

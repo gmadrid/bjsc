@@ -39,6 +39,19 @@ fn common_headers(config: &SupabaseConfig, access_token: &str) -> Vec<(String, S
     ]
 }
 
+/// Build a request to refresh an access token.
+pub fn refresh_token_request(config: &SupabaseConfig, refresh_token: &str) -> RequestDetails {
+    RequestDetails {
+        url: format!("{}/auth/v1/token?grant_type=refresh_token", config.base_url),
+        method: "POST".to_string(),
+        headers: vec![
+            ("apikey".to_string(), config.anon_key.clone()),
+            ("Content-Type".to_string(), "application/json".to_string()),
+        ],
+        body: Some(format!(r#"{{"refresh_token":"{}"}}"#, refresh_token)),
+    }
+}
+
 /// Build a request to fetch the user's deck.
 pub fn fetch_deck_request(config: &SupabaseConfig, access_token: &str) -> RequestDetails {
     let mut headers = common_headers(config, access_token);

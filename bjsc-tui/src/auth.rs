@@ -47,6 +47,49 @@ pub fn clear_tokens() {
     let _ = fs::remove_file(auth_path());
 }
 
+/// Refresh the access token using the refresh token (blocking).
+pub fn refresh_tokens(
+    config: &SupabaseConfig,
+    tokens: &AuthTokens,
+    rt: &tokio::runtime::Runtime,
+) -> Option<AuthTokens> {
+    let req = bjsc::supabase::refresh_token_request(config, &tokens.refresh_token);
+    let client = reqwest::Client::new();
+
+    let result = rt.block_on(async {
+        let mut builder = client.post(&req.url);
+        for (k, v) in &req.headers {
+            builder = builder.header(k, v);
+        }
+        if let Some(body) = req.body {
+            builder = builder.body(body);
+        }
+        builder.send().await
+    });
+
+    let resp = result.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+
+    let json: serde_json::Value = rt.block_on(resp.json()).ok()?;
+    let access_token = json.get("access_token")?.as_str()?.to_string();
+    let refresh_token = json
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&tokens.refresh_token)
+        .to_string();
+    let user_id = user_id_from_jwt(&access_token)?;
+
+    let new_tokens = AuthTokens {
+        access_token,
+        refresh_token,
+        user_id,
+    };
+    save_tokens(&new_tokens);
+    Some(new_tokens)
+}
+
 /// Run the browser-based OAuth flow.
 /// Opens the user's browser, waits for the redirect, extracts tokens.
 pub fn login(config: &SupabaseConfig) -> Result<AuthTokens, String> {
