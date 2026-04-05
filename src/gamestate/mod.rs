@@ -1,7 +1,9 @@
 use crate::hand::Hand;
 use crate::hand_builder::build_hand_for_index;
 use crate::shoe::Shoe;
-use crate::strat::{lookup_action, phrase_for_row, Action, ChartAction, TableIndex};
+use crate::strat::{
+    lookup_action, phrase_for_row, Action, ChartAction, RowIndex, TableIndex, TableType,
+};
 use crate::studymode::StudyMode;
 use crate::table_index_keys::{indices_for_mode, keys_for_mode, table_index_to_key};
 use crate::BjResult;
@@ -102,6 +104,26 @@ impl GameState {
         let (chart_action, table_index) = self.chart_action().ok()?;
         let correct_action = chart_action.apply_rules()?;
         let correct = action == correct_action;
+
+        // For splittable hands, override the table index to use the split chart
+        // so that stats, spaced rep, and error messages all track the split decision
+        let table_index = table_index.map(|ti| {
+            if self.player_hand.splittable() && ti.table_type() != TableType::Split {
+                let card_val = self
+                    .player_hand
+                    .first_card()
+                    .map(|c| c.value())
+                    .unwrap_or(0);
+                let split_row = if card_val == 11 { 1 } else { card_val };
+                if let Ok(split_ri) = RowIndex::new(TableType::Split, split_row) {
+                    crate::strat::new_table_index(split_ri, ti.col_index())
+                } else {
+                    ti
+                }
+            } else {
+                ti
+            }
+        });
 
         // Update stats
         if let Some(ref ti) = table_index {
