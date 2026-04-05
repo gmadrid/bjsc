@@ -12,7 +12,7 @@ pub enum Action {
 impl Action {
     pub fn from_key(key: char) -> Option<Self> {
         match key {
-            'h' => Some(Action::Hit),
+            'h' | 'a' => Some(Action::Hit),
             's' => Some(Action::Stand),
             'p' => Some(Action::Split),
             'd' => Some(Action::Double),
