@@ -290,6 +290,11 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
         List::new(log_items).block(Block::default().borders(Borders::ALL).title("Mistakes"));
     f.render_widget(log_list, chunks[5]);
 
+    let footer_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(1), Constraint::Length(22)])
+        .split(chunks[6]);
+
     let keymap = if app.show_shuffle_prompt {
         Paragraph::new("Shoe empty. Press ENTER or SPACE to shuffle.").style(
             Style::default()
@@ -299,7 +304,10 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
     } else {
         Paragraph::new("(H)it | (S)tand | (D)ouble | S(P)lit | (M)ode | Tab:Stats | (Q)uit")
     };
-    f.render_widget(keymap, chunks[6]);
+    f.render_widget(keymap, footer_cols[0]);
+
+    let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));
+    f.render_widget(version, footer_cols[1]);
 }
 
 fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
@@ -371,8 +379,16 @@ fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
     ]);
     f.render_widget(Paragraph::new(unseen_line), footer_rows[0]);
 
+    let hint_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(1), Constraint::Length(22)])
+        .split(footer_rows[1]);
+
     let hint = Paragraph::new("Tab: Back | (Q)uit").style(Style::default().fg(Color::DarkGray));
-    f.render_widget(hint, footer_rows[1]);
+    f.render_widget(hint, hint_cols[0]);
+
+    let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));
+    f.render_widget(version, hint_cols[1]);
 }
 
 fn centered_line(area: Rect, offset: u16) -> Rect {
