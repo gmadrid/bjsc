@@ -57,6 +57,8 @@ struct App {
     coaching_text: String,
     coach_scroll: u16,
     coaching_rx: Option<mpsc::Receiver<String>>,
+    screen_picker: Option<usize>,
+    confirm_quit: bool,
 }
 
 impl App {
@@ -108,24 +110,91 @@ impl App {
             coaching_text: String::new(),
             coach_scroll: 0,
             coaching_rx: None,
+            screen_picker: None,
+            confirm_quit: false,
         }
     }
 
-    fn handle_key(&mut self, code: KeyCode) {
-        if code == KeyCode::Tab {
-            self.screen = match self.screen {
-                Screen::Play => Screen::Histogram,
-                Screen::Histogram => Screen::Progress,
-                Screen::Progress => Screen::Coach,
-                Screen::Coach => Screen::Play,
-            };
-            if self.screen == Screen::Progress {
-                self.refresh_progress();
+    fn screen_index(&self) -> usize {
+        match self.screen {
+            Screen::Play => 0,
+            Screen::Histogram => 1,
+            Screen::Progress => 2,
+            Screen::Coach => 3,
+        }
+    }
+
+    fn go_to_screen(&mut self, idx: usize) {
+        let screen = match idx {
+            0 => Screen::Play,
+            1 => Screen::Histogram,
+            2 => Screen::Progress,
+            3 => Screen::Coach,
+            _ => return,
+        };
+        self.screen = screen;
+        if screen == Screen::Progress {
+            self.refresh_progress();
+        }
+        if screen == Screen::Coach {
+            self.refresh_coaching();
+        }
+    }
+
+    /// Returns true if the app should quit.
+    fn handle_key(&mut self, code: KeyCode) -> bool {
+        // Confirm quit dialog is open
+        if self.confirm_quit {
+            match code {
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => return true,
+                _ => self.confirm_quit = false,
             }
-            if self.screen == Screen::Coach {
-                self.refresh_coaching();
+            return false;
+        }
+
+        // Screen picker is open
+        if let Some(ref mut sel) = self.screen_picker {
+            match code {
+                KeyCode::Up | KeyCode::Char('k') => *sel = sel.saturating_sub(1),
+                KeyCode::Down | KeyCode::Char('j') => *sel = (*sel + 1).min(4),
+                KeyCode::Enter => {
+                    let idx = *sel;
+                    self.screen_picker = None;
+                    if idx == 4 {
+                        self.confirm_quit = true;
+                    } else {
+                        self.go_to_screen(idx);
+                    }
+                }
+                KeyCode::Char('p') => {
+                    self.screen_picker = None;
+                    self.go_to_screen(0);
+                }
+                KeyCode::Char('s') => {
+                    self.screen_picker = None;
+                    self.go_to_screen(1);
+                }
+                KeyCode::Char('g') => {
+                    self.screen_picker = None;
+                    self.go_to_screen(2);
+                }
+                KeyCode::Char('c') => {
+                    self.screen_picker = None;
+                    self.go_to_screen(3);
+                }
+                KeyCode::Char('q') => {
+                    self.screen_picker = None;
+                    self.confirm_quit = true;
+                }
+                KeyCode::Esc => self.screen_picker = None,
+                _ => {}
             }
-            return;
+            return false;
+        }
+
+        if code == KeyCode::Esc {
+            self.screen_picker = Some(self.screen_index());
+            return false;
         }
 
         if self.screen == Screen::Coach {
@@ -138,11 +207,11 @@ impl App {
                 }
                 _ => {}
             }
-            return;
+            return false;
         }
 
         if self.screen != Screen::Play {
-            return;
+            return false;
         }
 
         if self.show_shuffle_prompt {
@@ -151,7 +220,7 @@ impl App {
                 self.game_state.deal_a_hand();
                 self.show_shuffle_prompt = false;
             }
-            return;
+            return false;
         }
 
         if code == KeyCode::Char('m') {
@@ -160,14 +229,16 @@ impl App {
             self.game_state.deal_a_hand();
             self.status = StatusMessage::None;
             self.save();
-            return;
+            return false;
         }
 
         let action = match code {
             KeyCode::Char(ch) => Action::from_key(ch),
             _ => None,
         };
-        let Some(action) = action else { return };
+        let Some(action) = action else {
+            return false;
+        };
 
         if let Some(result) = self.game_state.check_answer(action) {
             // Capture log data before consuming fields
@@ -207,6 +278,7 @@ impl App {
                 self.show_shuffle_prompt = true;
             }
         }
+        false
     }
 
     fn save(&mut self) {
@@ -333,8 +405,124 @@ fn draw(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &App) -> io:
             Screen::Progress => draw_progress(f, area, app),
             Screen::Coach => draw_coach(f, area, app),
         }
+        if app.confirm_quit {
+            draw_confirm_quit(f, area);
+        } else if let Some(sel) = app.screen_picker {
+            draw_screen_picker(f, area, sel);
+        }
     })?;
     Ok(())
+}
+
+fn draw_screen_picker(f: &mut ratatui::Frame, area: Rect, selected: usize) {
+    let width = 24u16;
+    let height = 10u16;
+    let x = area.x + (area.width.saturating_sub(width)) / 2;
+    let y = area.y + (area.height.saturating_sub(height)) / 2;
+    let popup = Rect::new(x, y, width, height);
+
+    f.render_widget(ratatui::widgets::Clear, popup);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .title(" Go to ");
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    // (index, before_key, key_char, after_key)
+    let entries: [(usize, &str, &str, &str); 4] = [
+        (0, "", "P", "lay"),
+        (1, "", "S", "tats"),
+        (2, "Pro", "g", "ress"),
+        (3, "", "C", "oach"),
+    ];
+
+    let mut items: Vec<ListItem> = entries
+        .iter()
+        .map(|(i, before, key, after)| {
+            let is_sel = *i == selected;
+            let bg = if is_sel { Color::Cyan } else { Color::Reset };
+            let fg = if is_sel { Color::Black } else { Color::White };
+            let key_fg = if is_sel {
+                Color::Black
+            } else {
+                Color::Rgb(100, 180, 255)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled("  ", Style::default().fg(fg).bg(bg)),
+                Span::styled(*before, Style::default().fg(fg).bg(bg)),
+                Span::styled(
+                    *key,
+                    Style::default()
+                        .fg(key_fg)
+                        .bg(bg)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                ),
+                Span::styled(*after, Style::default().fg(fg).bg(bg)),
+                Span::styled("  ", Style::default().fg(fg).bg(bg)),
+            ]))
+        })
+        .collect();
+
+    // Separator
+    items.push(ListItem::new(Span::styled(
+        "──────────────────────",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    // Quit
+    let is_sel = selected == 4;
+    let bg = if is_sel { Color::Red } else { Color::Reset };
+    let fg = if is_sel { Color::Black } else { Color::Red };
+    let key_fg = if is_sel {
+        Color::Black
+    } else {
+        Color::Rgb(100, 180, 255)
+    };
+    items.push(ListItem::new(Line::from(vec![
+        Span::styled("  ", Style::default().fg(fg).bg(bg)),
+        Span::styled(
+            "Q",
+            Style::default()
+                .fg(key_fg)
+                .bg(bg)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        ),
+        Span::styled("uit", Style::default().fg(fg).bg(bg)),
+        Span::styled("  ", Style::default().fg(fg).bg(bg)),
+    ])));
+
+    f.render_widget(List::new(items), inner);
+}
+
+fn draw_confirm_quit(f: &mut ratatui::Frame, area: Rect) {
+    let width = 28u16;
+    let height = 5u16;
+    let x = area.x + (area.width.saturating_sub(width)) / 2;
+    let y = area.y + (area.height.saturating_sub(height)) / 2;
+    let popup = Rect::new(x, y, width, height);
+
+    f.render_widget(ratatui::widgets::Clear, popup);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Red))
+        .title(" Quit? ");
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let text = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" = Yes   "),
+            Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" = No"),
+        ]),
+    ];
+    f.render_widget(Paragraph::new(text), inner);
 }
 
 fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
@@ -442,7 +630,7 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
                 .add_modifier(Modifier::BOLD),
         )
     } else {
-        Paragraph::new("(H)it | (S)tand | (D)ouble | S(P)lit | (M)ode | Tab:Stats | (Q)uit")
+        Paragraph::new("(H)it | (S)tand | (D)ouble | S(P)lit | (M)ode | Esc:Menu")
     };
     f.render_widget(keymap, footer_cols[0]);
 
@@ -524,7 +712,7 @@ fn draw_histogram(f: &mut ratatui::Frame, area: Rect, app: &App) {
         .constraints([Constraint::Min(1), Constraint::Length(22)])
         .split(footer_rows[1]);
 
-    let hint = Paragraph::new("Tab: Back | (Q)uit").style(Style::default().fg(Color::DarkGray));
+    let hint = Paragraph::new("Esc: Menu").style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, hint_cols[0]);
 
     let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));
@@ -686,7 +874,7 @@ fn draw_progress(f: &mut ratatui::Frame, area: Rect, app: &App) {
         .constraints([Constraint::Min(1), Constraint::Length(22)])
         .split(chunks[6]);
 
-    let hint = Paragraph::new("Tab: Next | (Q)uit").style(Style::default().fg(Color::DarkGray));
+    let hint = Paragraph::new("Esc: Menu").style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, hint_cols[0]);
 
     let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));
@@ -723,8 +911,8 @@ fn draw_coach(f: &mut ratatui::Frame, area: Rect, app: &App) {
         .constraints([Constraint::Min(1), Constraint::Length(22)])
         .split(chunks[2]);
 
-    let hint = Paragraph::new("↑/↓: Scroll | Tab: Next | (Q)uit")
-        .style(Style::default().fg(Color::DarkGray));
+    let hint =
+        Paragraph::new("↑/↓: Scroll | Esc: Menu").style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, hint_cols[0]);
 
     let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));
@@ -985,9 +1173,8 @@ fn main() -> io::Result<()> {
                 if key.kind != KeyEventKind::Press {
                     continue;
                 }
-                match key.code {
-                    KeyCode::Char('q') if !app.show_shuffle_prompt => break,
-                    code => app.handle_key(code),
+                if app.handle_key(key.code) {
+                    break;
                 }
             }
         }
