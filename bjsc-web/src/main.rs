@@ -173,9 +173,12 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let status_visible = RwSignal::new(false);
     let errors: RwSignal<Vec<String>> = RwSignal::new(vec![]);
     let show_shuffle = RwSignal::new(false);
-    let show_histogram = RwSignal::new(false);
+    // Screen: 0=play, 1=histogram, 2=progress
+    let screen = RwSignal::new(0u8);
     let box_counts: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
     let unseen_count = RwSignal::new(0u32);
+    let progress_stats: RwSignal<bjsc::progress::ProgressStats> =
+        RwSignal::new(bjsc::progress::ProgressStats::default());
     let loading = RwSignal::new(true);
 
     let sync_all = move || {
@@ -333,10 +336,10 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             let key = e.key();
             if key == "Tab" {
                 e.prevent_default();
-                show_histogram.update(|v| *v = !*v);
+                screen.update(|v| *v = (*v + 1) % 3);
                 return;
             }
-            if show_histogram.get_untracked() {
+            if screen.get_untracked() != 0 {
                 return;
             }
             if show_shuffle.get_untracked() {
@@ -362,7 +365,22 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
     closure.forget();
 
-    let toggle_histogram = move |_| show_histogram.update(|v| *v = !*v);
+    let cycle_screen = move |_| {
+        let next = (screen.get_untracked() + 1) % 3;
+        if next == 2 {
+            // Refresh progress when switching to progress screen
+            if let Some(auth) = auth_state.get_untracked() {
+                let config = supabase_config();
+                let token = auth.access_token.clone();
+                leptos::task::spawn_local(async move {
+                    if let Ok(logs) = api::fetch_answer_logs(&config, &token, 1000).await {
+                        progress_stats.set(bjsc::progress::ProgressStats::from_logs(&logs));
+                    }
+                });
+            }
+        }
+        screen.set(next);
+    };
 
     view! {
         // Loading state
@@ -377,14 +395,14 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 <span class="font-bold text-amber-300">{move || mode_text.get()}</span>
                 <button
                     class="text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
-                    class:hidden=move || show_histogram.get()
+                    class:hidden=move || screen.get() != 0
                     on:click=move |_| cycle_mode()
                 >"(M) Next"</button>
                 <button
                     class="ml-auto text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
-                    on:click=toggle_histogram
+                    on:click=cycle_screen
                 >
-                    {move || if show_histogram.get() { "Back (Tab)" } else { "Stats (Tab)" }}
+                    {move || match screen.get() { 0 => "Stats (Tab)", 1 => "Progress (Tab)", _ => "Back (Tab)" }}
                 </button>
                 <button
                     class="text-sm px-3 py-1 border border-red-900 rounded bg-slate-800 text-red-400 cursor-pointer hover:bg-red-950 hover:border-red-700"
@@ -393,7 +411,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             </div>
 
             // Histogram screen
-            <div class:hidden=move || !show_histogram.get()>
+            <div class:hidden=move || screen.get() != 1>
                 <h2 class="font-bold text-cyan-400 text-lg mb-4">"Spaced Repetition Buckets"</h2>
                 <div class="space-y-1.5">
                     {move || {
@@ -427,8 +445,81 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 </div>
             </div>
 
+            // Progress screen
+            <div class:hidden=move || screen.get() != 2>
+                <h2 class="font-bold text-cyan-400 text-lg mb-4">"Progress Dashboard"</h2>
+
+                // Overall accuracy
+                <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
+                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Accuracy"</div>
+                    <div class="mb-1">
+                        <span class="font-bold text-gray-400">"Overall: "</span>
+                        <span class="font-bold">{move || format!("{:.1}%", progress_stats.get().accuracy_pct)}</span>
+                        <span class="text-gray-500">{move || format!("  ({}/{})", progress_stats.get().total_correct, progress_stats.get().total_answers)}</span>
+                    </div>
+                    <div class="flex gap-6">
+                        <span><span class="font-bold text-gray-400">"Hard: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().hard_correct, progress_stats.get().hard_total)}</span>
+                        <span><span class="font-bold text-gray-400">"Soft: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().soft_correct, progress_stats.get().soft_total)}</span>
+                        <span><span class="font-bold text-gray-400">"Split: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().split_correct, progress_stats.get().split_total)}</span>
+                        <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().double_correct, progress_stats.get().double_total)}</span>
+                    </div>
+                </div>
+
+                // Trouble spots
+                <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
+                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Trouble Spots"</div>
+                    {move || {
+                        let stats = progress_stats.get();
+                        if stats.trouble_spots.is_empty() {
+                            view! { <div class="text-gray-500 text-sm">"No mistakes recorded yet."</div> }.into_any()
+                        } else {
+                            view! {
+                                <div>
+                                    {stats.trouble_spots.iter().map(|(idx, wrong, seen)| {
+                                        let pct = (1.0 - *wrong as f64 / *seen as f64) * 100.0;
+                                        view! {
+                                            <div class="flex justify-between py-0.5 text-sm border-b border-gray-800">
+                                                <span class="text-red-400">{idx.clone()}</span>
+                                                <span>{format!("wrong {}/{} ({:.0}%)", wrong, seen, pct)}</span>
+                                            </div>
+                                        }
+                                    }).collect::<Vec<_>>()}
+                                </div>
+                            }.into_any()
+                        }
+                    }}
+                </div>
+
+                // Recent sessions
+                <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
+                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Recent Sessions"</div>
+                    {move || {
+                        let stats = progress_stats.get();
+                        if stats.sessions.is_empty() {
+                            view! { <div class="text-gray-500 text-sm">"No sessions recorded yet."</div> }.into_any()
+                        } else {
+                            view! {
+                                <div>
+                                    {stats.sessions.iter().map(|(day, total, correct)| {
+                                        let pct = if *total > 0 { *correct as f64 / *total as f64 * 100.0 } else { 0.0 };
+                                        let color_class = if pct >= 80.0 { "text-green-400" } else if pct >= 60.0 { "text-yellow-400" } else { "text-red-400" };
+                                        view! {
+                                            <div class="flex justify-between py-0.5 text-sm border-b border-gray-800">
+                                                <span class="text-cyan-400">{day.clone()}</span>
+                                                <span>{format!("{} answered", total)}</span>
+                                                <span class=color_class>{format!("{:.0}%", pct)}</span>
+                                            </div>
+                                        }
+                                    }).collect::<Vec<_>>()}
+                                </div>
+                            }.into_any()
+                        }
+                    }}
+                </div>
+            </div>
+
             // Play screen
-            <div class:hidden=move || show_histogram.get()>
+            <div class:hidden=move || screen.get() != 0>
                 // Stats panel
                 <div class="border border-gray-700 rounded-md px-4 py-3 mb-6">
                     <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Stats"</div>

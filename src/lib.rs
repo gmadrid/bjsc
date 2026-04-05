@@ -7,6 +7,7 @@ mod strat;
 
 mod hand_builder;
 pub mod persistence;
+pub mod progress;
 mod studymode;
 pub mod supabase;
 mod table_index_keys;

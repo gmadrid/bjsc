@@ -1,6 +1,6 @@
 use bjsc::supabase::{
-    fetch_deck_request, insert_answer_log_request, upsert_deck_request, AnswerLogRow,
-    SupabaseConfig, UserDeckRow,
+    fetch_answer_logs_request, fetch_deck_request, insert_answer_log_request, upsert_deck_request,
+    AnswerLogEntry, AnswerLogRow, SupabaseConfig, UserDeckRow,
 };
 use bjsc::StudyMode;
 use spaced_rep::Deck;
@@ -89,4 +89,31 @@ pub async fn insert_answer_log(
     }
 
     Ok(())
+}
+
+/// Fetch recent answer logs from Supabase.
+pub async fn fetch_answer_logs(
+    config: &SupabaseConfig,
+    token: &str,
+    limit: u32,
+) -> Result<Vec<AnswerLogEntry>, String> {
+    let req = fetch_answer_logs_request(config, token, limit);
+    let client = reqwest::Client::new();
+
+    let mut builder = client.get(&req.url);
+    for (k, v) in &req.headers {
+        builder = builder.header(k, v);
+    }
+
+    let resp = builder.send().await.map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Fetch logs failed ({}): {}", status, text));
+    }
+
+    resp.json::<Vec<AnswerLogEntry>>()
+        .await
+        .map_err(|e| e.to_string())
 }

@@ -1,6 +1,6 @@
 use bjsc::supabase::{
-    fetch_deck_request, insert_answer_log_request, upsert_deck_request, AnswerLogRow,
-    SupabaseConfig, UserDeckRow,
+    fetch_answer_logs_request, fetch_deck_request, insert_answer_log_request, upsert_deck_request,
+    AnswerLogEntry, AnswerLogRow, SupabaseConfig, UserDeckRow,
 };
 use bjsc::StudyMode;
 use gloo_net::http;
@@ -89,4 +89,29 @@ pub async fn insert_answer_log(
     }
 
     Ok(())
+}
+
+/// Fetch recent answer logs from Supabase.
+pub async fn fetch_answer_logs(
+    config: &SupabaseConfig,
+    token: &str,
+    limit: u32,
+) -> Result<Vec<AnswerLogEntry>, String> {
+    let req = fetch_answer_logs_request(config, token, limit);
+
+    let mut builder = http::Request::get(&req.url);
+    for (k, v) in &req.headers {
+        builder = builder.header(k, v);
+    }
+    let request = builder.build().map_err(|e| format!("{}", e))?;
+    let resp = request.send().await.map_err(|e| format!("{}", e))?;
+
+    if !resp.ok() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Fetch logs failed ({}): {}", resp.status(), text));
+    }
+
+    resp.json::<Vec<AnswerLogEntry>>()
+        .await
+        .map_err(|e| format!("{}", e))
 }
