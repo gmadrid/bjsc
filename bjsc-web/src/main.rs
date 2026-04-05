@@ -351,6 +351,22 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         auth_state.set(None);
     };
 
+    let advance_screen = move || {
+        let next = (screen.get_untracked() + 1) % 3;
+        if next == 2 {
+            if let Some(auth) = auth_state.get_untracked() {
+                let config = supabase_config();
+                let token = auth.access_token.clone();
+                leptos::task::spawn_local(async move {
+                    if let Ok(logs) = api::fetch_answer_logs(&config, &token, 1000).await {
+                        progress_stats.set(bjsc::progress::ProgressStats::from_logs(&logs));
+                    }
+                });
+            }
+        }
+        screen.set(next);
+    };
+
     // Global keyboard listener
     let closure =
         Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
@@ -364,7 +380,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             let key = e.key();
             if key == "Tab" {
                 e.prevent_default();
-                screen.update(|v| *v = (*v + 1) % 3);
+                advance_screen();
                 return;
             }
             if screen.get_untracked() != 0 {
@@ -393,22 +409,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
     closure.forget();
 
-    let cycle_screen = move |_| {
-        let next = (screen.get_untracked() + 1) % 3;
-        if next == 2 {
-            // Refresh progress when switching to progress screen
-            if let Some(auth) = auth_state.get_untracked() {
-                let config = supabase_config();
-                let token = auth.access_token.clone();
-                leptos::task::spawn_local(async move {
-                    if let Ok(logs) = api::fetch_answer_logs(&config, &token, 1000).await {
-                        progress_stats.set(bjsc::progress::ProgressStats::from_logs(&logs));
-                    }
-                });
-            }
-        }
-        screen.set(next);
-    };
+    let cycle_screen = move |_| advance_screen();
 
     view! {
         // Loading state
