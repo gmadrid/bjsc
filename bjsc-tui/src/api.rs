@@ -1,4 +1,7 @@
-use bjsc::supabase::{fetch_deck_request, upsert_deck_request, SupabaseConfig, UserDeckRow};
+use bjsc::supabase::{
+    fetch_deck_request, insert_answer_log_request, upsert_deck_request, AnswerLogRow,
+    SupabaseConfig, UserDeckRow,
+};
 use bjsc::StudyMode;
 use spaced_rep::Deck;
 
@@ -55,6 +58,34 @@ pub async fn upsert_user_deck(
         let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
         return Err(format!("Upsert failed ({}): {}", status, text));
+    }
+
+    Ok(())
+}
+
+/// Log an answer to Supabase.
+pub async fn insert_answer_log(
+    config: &SupabaseConfig,
+    token: &str,
+    row: &AnswerLogRow,
+) -> Result<(), String> {
+    let req = insert_answer_log_request(config, token, row);
+    let client = reqwest::Client::new();
+
+    let mut builder = client.post(&req.url);
+    for (k, v) in &req.headers {
+        builder = builder.header(k, v);
+    }
+    if let Some(body) = req.body {
+        builder = builder.body(body);
+    }
+
+    let resp = builder.send().await.map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Answer log failed ({}): {}", status, text));
     }
 
     Ok(())

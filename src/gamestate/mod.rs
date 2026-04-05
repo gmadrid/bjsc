@@ -22,8 +22,10 @@ pub struct AnswerResult {
     pub player_action: Action,
     /// Error log entry for wrong answers.
     pub log_entry: Option<String>,
-    /// The TableIndex of the question (for spaced rep tracking).
+    /// The TableIndex of the question.
     pub table_index: Option<TableIndex>,
+    /// String key for the table index (for answer logging).
+    pub table_index_key: Option<String>,
 }
 
 #[derive(Debug)]
@@ -152,12 +154,15 @@ impl GameState {
             None
         };
 
+        let table_index_key = table_index.as_ref().map(table_index_to_key);
+
         Some(AnswerResult {
             correct,
             correct_action: Some(correct_action),
             player_action: action,
             log_entry,
             table_index,
+            table_index_key,
         })
     }
 

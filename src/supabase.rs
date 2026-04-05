@@ -101,6 +101,63 @@ pub fn upsert_deck_request(
     }
 }
 
+/// Row for the answer_log table.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnswerLogRow {
+    pub user_id: String,
+    pub table_index: String,
+    pub correct: bool,
+    pub player_action: String,
+    pub correct_action: String,
+}
+
+/// Build a request to insert an answer log entry.
+pub fn insert_answer_log_request(
+    config: &SupabaseConfig,
+    access_token: &str,
+    row: &AnswerLogRow,
+) -> RequestDetails {
+    let mut headers = common_headers(config, access_token);
+    headers.push(("Content-Type".to_string(), "application/json".to_string()));
+
+    RequestDetails {
+        url: format!("{}/rest/v1/answer_log", config.base_url),
+        method: "POST".to_string(),
+        headers,
+        body: Some(serde_json::to_string(row).unwrap_or_default()),
+    }
+}
+
+/// Build a request to fetch answer logs for stats (recent N entries).
+pub fn fetch_answer_logs_request(
+    config: &SupabaseConfig,
+    access_token: &str,
+    limit: u32,
+) -> RequestDetails {
+    let mut headers = common_headers(config, access_token);
+    headers.push(("Accept".to_string(), "application/json".to_string()));
+
+    RequestDetails {
+        url: format!(
+            "{}/rest/v1/answer_log?select=*&order=created_at.desc&limit={}",
+            config.base_url, limit
+        ),
+        method: "GET".to_string(),
+        headers,
+        body: None,
+    }
+}
+
+/// A log entry as returned from the API.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnswerLogEntry {
+    pub table_index: String,
+    pub correct: bool,
+    pub player_action: String,
+    pub correct_action: String,
+    pub created_at: String,
+}
+
 /// Extract the `sub` (user ID) from a JWT without verification.
 /// The JWT is base64-encoded: header.payload.signature
 pub fn user_id_from_jwt(token: &str) -> Option<String> {

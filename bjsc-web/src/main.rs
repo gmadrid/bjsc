@@ -86,6 +86,29 @@ fn push_display(
     mode_text.set(data.mode.clone());
 }
 
+/// Log an answer to Supabase (fire-and-forget).
+fn log_answer_to_cloud(
+    auth: &AuthState,
+    table_index_key: &str,
+    correct: bool,
+    player_action: &str,
+    correct_action: &str,
+) {
+    let config = supabase_config();
+    let token = auth.access_token.clone();
+    let row = bjsc::supabase::AnswerLogRow {
+        user_id: auth.user_id.clone(),
+        table_index: table_index_key.to_string(),
+        correct,
+        player_action: player_action.to_string(),
+        correct_action: correct_action.to_string(),
+    };
+
+    leptos::task::spawn_local(async move {
+        let _ = api::insert_answer_log(&config, &token, &row).await;
+    });
+}
+
 /// Save the current game state to Supabase (fire-and-forget).
 fn save_to_cloud(auth: &AuthState) {
     let config = supabase_config();
@@ -223,6 +246,18 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             (result, shoe_done)
         });
         if let (Some(result), shoe_done) = outcome {
+            // Capture log data before consuming fields
+            let answer_log_data = result.table_index_key.clone().map(|key| {
+                (
+                    key,
+                    result.correct,
+                    result.player_action.to_string(),
+                    result
+                        .correct_action
+                        .map(|a| a.to_string())
+                        .unwrap_or_default(),
+                )
+            });
             if result.correct {
                 status_text.set(format!("Correct: {}", result.player_action));
                 status_is_error.set(false);
@@ -243,13 +278,16 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             if shoe_done {
                 show_shuffle.set(true);
             }
+
+            // Save to cloud and log answer
+            if let Some(auth) = auth_state.get_untracked() {
+                save_to_cloud(&auth);
+                if let Some((key, was_correct, player_act, correct_act)) = answer_log_data {
+                    log_answer_to_cloud(&auth, &key, was_correct, &player_act, &correct_act);
+                }
+            }
         }
         sync_all();
-
-        // Save to cloud
-        if let Some(auth) = auth_state.get_untracked() {
-            save_to_cloud(&auth);
-        }
     };
 
     let do_shuffle = move || {

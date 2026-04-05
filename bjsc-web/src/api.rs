@@ -1,4 +1,7 @@
-use bjsc::supabase::{fetch_deck_request, upsert_deck_request, SupabaseConfig, UserDeckRow};
+use bjsc::supabase::{
+    fetch_deck_request, insert_answer_log_request, upsert_deck_request, AnswerLogRow,
+    SupabaseConfig, UserDeckRow,
+};
 use bjsc::StudyMode;
 use gloo_net::http;
 use spaced_rep::Deck;
@@ -56,6 +59,33 @@ pub async fn upsert_user_deck(
     if !resp.ok() {
         let text = resp.text().await.unwrap_or_default();
         return Err(format!("Upsert failed ({}): {}", resp.status(), text));
+    }
+
+    Ok(())
+}
+
+/// Log an answer to Supabase.
+pub async fn insert_answer_log(
+    config: &SupabaseConfig,
+    token: &str,
+    row: &AnswerLogRow,
+) -> Result<(), String> {
+    let req = insert_answer_log_request(config, token, row);
+
+    let mut builder = http::Request::post(&req.url);
+    for (k, v) in &req.headers {
+        builder = builder.header(k, v);
+    }
+    let request = if let Some(body) = &req.body {
+        builder.body(body.as_str()).map_err(|e| format!("{}", e))?
+    } else {
+        builder.build().map_err(|e| format!("{}", e))?
+    };
+    let resp = request.send().await.map_err(|e| format!("{}", e))?;
+
+    if !resp.ok() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Answer log failed ({}): {}", resp.status(), text));
     }
 
     Ok(())

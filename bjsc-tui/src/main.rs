@@ -138,6 +138,19 @@ impl App {
         let Some(action) = action else { return };
 
         if let Some(result) = self.game_state.check_answer(action) {
+            // Capture log data before consuming fields
+            let answer_log_data = result.table_index_key.clone().map(|key| {
+                (
+                    key,
+                    result.correct,
+                    result.player_action.to_string(),
+                    result
+                        .correct_action
+                        .map(|a| a.to_string())
+                        .unwrap_or_default(),
+                )
+            });
+
             if result.correct {
                 self.status = StatusMessage::Correct(format!("Correct: {}", result.player_action));
             } else {
@@ -154,6 +167,9 @@ impl App {
             }
 
             self.save();
+            if let Some((key, was_correct, player_act, correct_act)) = answer_log_data {
+                self.log_answer(&key, was_correct, &player_act, &correct_act);
+            }
 
             if !self.game_state.deal_a_hand() {
                 self.show_shuffle_prompt = true;
@@ -192,6 +208,28 @@ impl App {
                     self.auth = Some(new_auth);
                 }
             }
+        }
+    }
+
+    fn log_answer(
+        &self,
+        table_index_key: &str,
+        correct: bool,
+        player_action: &str,
+        correct_action: &str,
+    ) {
+        if let Some(ref auth) = self.auth {
+            let config = supabase_config();
+            let row = bjsc::supabase::AnswerLogRow {
+                user_id: auth.user_id.clone(),
+                table_index: table_index_key.to_string(),
+                correct,
+                player_action: player_action.to_string(),
+                correct_action: correct_action.to_string(),
+            };
+            let _ = self
+                .rt
+                .block_on(api::insert_answer_log(&config, &auth.access_token, &row));
         }
     }
 }
