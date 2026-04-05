@@ -34,6 +34,7 @@ enum Screen {
     Play,
     Histogram,
     Progress,
+    Coach,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +53,7 @@ struct App {
     auth: Option<AuthTokens>,
     rt: tokio::runtime::Runtime,
     progress: bjsc::progress::ProgressStats,
+    coaching_text: String,
 }
 
 impl App {
@@ -100,6 +102,7 @@ impl App {
             auth,
             rt,
             progress: bjsc::progress::ProgressStats::default(),
+            coaching_text: String::new(),
         }
     }
 
@@ -108,10 +111,14 @@ impl App {
             self.screen = match self.screen {
                 Screen::Play => Screen::Histogram,
                 Screen::Histogram => Screen::Progress,
-                Screen::Progress => Screen::Play,
+                Screen::Progress => Screen::Coach,
+                Screen::Coach => Screen::Play,
             };
             if self.screen == Screen::Progress {
                 self.refresh_progress();
+            }
+            if self.screen == Screen::Coach {
+                self.refresh_coaching();
             }
             return;
         }
@@ -218,6 +225,38 @@ impl App {
         }
     }
 
+    fn refresh_coaching(&mut self) {
+        if let Some(ref auth) = self.auth {
+            self.coaching_text = "Loading coaching advice...".to_string();
+            let config = supabase_config();
+            let result = self
+                .rt
+                .block_on(api::get_coaching(&config, &auth.access_token));
+
+            // If failed, try refreshing token and retry
+            let result = if result.is_err() {
+                if let Some(new_auth) = auth::refresh_tokens(&config, auth, &self.rt) {
+                    let r = self
+                        .rt
+                        .block_on(api::get_coaching(&config, &new_auth.access_token));
+                    self.auth = Some(new_auth);
+                    r
+                } else {
+                    result
+                }
+            } else {
+                result
+            };
+
+            match result {
+                Ok(text) => self.coaching_text = text,
+                Err(e) => self.coaching_text = format!("Error: {}", e),
+            }
+        } else {
+            self.coaching_text = "Sign in to get coaching advice.".to_string();
+        }
+    }
+
     fn refresh_progress(&mut self) {
         if let Some(ref auth) = self.auth {
             let config = supabase_config();
@@ -260,6 +299,7 @@ fn draw(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &App) -> io:
             Screen::Play => draw_play(f, area, app),
             Screen::Histogram => draw_histogram(f, area, app),
             Screen::Progress => draw_progress(f, area, app),
+            Screen::Coach => draw_coach(f, area, app),
         }
     })?;
     Ok(())
@@ -613,6 +653,41 @@ fn draw_progress(f: &mut ratatui::Frame, area: Rect, app: &App) {
         .direction(Direction::Horizontal)
         .constraints([Constraint::Min(1), Constraint::Length(22)])
         .split(chunks[6]);
+
+    let hint = Paragraph::new("Tab: Next | (Q)uit").style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, hint_cols[0]);
+
+    let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));
+    f.render_widget(version, hint_cols[1]);
+}
+
+fn draw_coach(f: &mut ratatui::Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // title
+            Constraint::Min(5),    // coaching text
+            Constraint::Length(1), // hint
+        ])
+        .split(area);
+
+    let title = Span::styled(
+        "Coach (powered by Claude)",
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    );
+    f.render_widget(Paragraph::new(Line::from(title)), chunks[0]);
+
+    let text = Paragraph::new(app.coaching_text.as_str())
+        .wrap(ratatui::widgets::Wrap { trim: false })
+        .block(Block::default().borders(Borders::ALL));
+    f.render_widget(text, chunks[1]);
+
+    let hint_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(1), Constraint::Length(22)])
+        .split(chunks[2]);
 
     let hint = Paragraph::new("Tab: Next | (Q)uit").style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, hint_cols[0]);

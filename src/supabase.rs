@@ -158,6 +158,23 @@ pub struct AnswerLogEntry {
     pub created_at: String,
 }
 
+/// Build a request to call the coaching edge function.
+pub fn coaching_request(config: &SupabaseConfig, access_token: &str) -> RequestDetails {
+    RequestDetails {
+        url: format!("{}/functions/v1/coaching", config.base_url),
+        method: "POST".to_string(),
+        headers: vec![
+            ("apikey".to_string(), config.anon_key.clone()),
+            (
+                "Authorization".to_string(),
+                format!("Bearer {}", access_token),
+            ),
+            ("Content-Type".to_string(), "application/json".to_string()),
+        ],
+        body: Some("{}".to_string()),
+    }
+}
+
 /// Decode the JWT payload as a JSON Value.
 fn jwt_payload(token: &str) -> Option<serde_json::Value> {
     let parts: Vec<&str> = token.split('.').collect();

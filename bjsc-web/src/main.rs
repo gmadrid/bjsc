@@ -193,8 +193,9 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let status_visible = RwSignal::new(false);
     let errors: RwSignal<Vec<String>> = RwSignal::new(vec![]);
     let show_shuffle = RwSignal::new(false);
-    // Screen: 0=play, 1=histogram, 2=progress
+    // Screen: 0=play, 1=histogram, 2=progress, 3=coach
     let screen = RwSignal::new(0u8);
+    let coaching_text = RwSignal::new(String::new());
     let box_counts: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
     let unseen_count = RwSignal::new(0u32);
     let new_count = RwSignal::new(0u32);
@@ -352,7 +353,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     };
 
     let advance_screen = move || {
-        let next = (screen.get_untracked() + 1) % 3;
+        let next = (screen.get_untracked() + 1) % 4;
         if next == 2 {
             if let Some(auth) = auth_state.get_untracked() {
                 let config = supabase_config();
@@ -360,6 +361,19 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 leptos::task::spawn_local(async move {
                     if let Ok(logs) = api::fetch_answer_logs(&config, &token, 1000).await {
                         progress_stats.set(bjsc::progress::ProgressStats::from_logs(&logs));
+                    }
+                });
+            }
+        }
+        if next == 3 {
+            coaching_text.set("Loading coaching advice...".to_string());
+            if let Some(auth) = auth_state.get_untracked() {
+                let config = supabase_config();
+                let token = auth.access_token.clone();
+                leptos::task::spawn_local(async move {
+                    match api::get_coaching(&config, &token).await {
+                        Ok(text) => coaching_text.set(text),
+                        Err(e) => coaching_text.set(format!("Error: {}", e)),
                     }
                 });
             }
@@ -431,7 +445,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                     class="ml-auto text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
                     on:click=cycle_screen
                 >
-                    {move || match screen.get() { 0 => "Stats (Tab)", 1 => "Progress (Tab)", _ => "Back (Tab)" }}
+                    {move || match screen.get() { 0 => "Stats (Tab)", 1 => "Progress (Tab)", 2 => "Coach (Tab)", _ => "Back (Tab)" }}
                 </button>
                 <span class="text-xs text-gray-500">{move || auth_state.get().map(|a| a.email).unwrap_or_default()}</span>
                 <button
@@ -545,6 +559,14 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                             }.into_any()
                         }
                     }}
+                </div>
+            </div>
+
+            // Coach screen
+            <div class:hidden=move || screen.get() != 3>
+                <h2 class="font-bold text-cyan-400 text-lg mb-4">"Coach (powered by Claude)"</h2>
+                <div class="border border-gray-700 rounded-md px-4 py-4 whitespace-pre-wrap text-sm leading-relaxed">
+                    {move || coaching_text.get()}
                 </div>
             </div>
 

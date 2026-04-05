@@ -1,6 +1,6 @@
 use bjsc::supabase::{
-    fetch_answer_logs_request, fetch_deck_request, insert_answer_log_request, upsert_deck_request,
-    AnswerLogEntry, AnswerLogRow, SupabaseConfig, UserDeckRow,
+    coaching_request, fetch_answer_logs_request, fetch_deck_request, insert_answer_log_request,
+    upsert_deck_request, AnswerLogEntry, AnswerLogRow, SupabaseConfig, UserDeckRow,
 };
 use bjsc::StudyMode;
 use spaced_rep::Deck;
@@ -116,4 +116,33 @@ pub async fn fetch_answer_logs(
     resp.json::<Vec<AnswerLogEntry>>()
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Get coaching advice from the Claude-powered edge function.
+pub async fn get_coaching(config: &SupabaseConfig, token: &str) -> Result<String, String> {
+    let req = coaching_request(config, token);
+    let client = reqwest::Client::new();
+
+    let mut builder = client.post(&req.url);
+    for (k, v) in &req.headers {
+        builder = builder.header(k, v);
+    }
+    if let Some(body) = req.body {
+        builder = builder.body(body);
+    }
+
+    let resp = builder.send().await.map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Coaching failed ({}): {}", status, text));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(json
+        .get("coaching")
+        .and_then(|v| v.as_str())
+        .unwrap_or("No coaching available.")
+        .to_string())
 }
