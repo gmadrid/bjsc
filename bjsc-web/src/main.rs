@@ -31,7 +31,6 @@ struct DisplayData {
     unseen: u32,
 }
 
-/// Read all display data from game state in one borrow.
 fn read_display() -> DisplayData {
     GAME.with_borrow(|gs| {
         let s = gs.stats();
@@ -50,7 +49,6 @@ fn read_display() -> DisplayData {
     })
 }
 
-/// Push display data into signals (no game borrow held).
 #[allow(clippy::too_many_arguments)]
 fn push_display(
     data: &DisplayData,
@@ -114,8 +112,6 @@ fn App() -> impl IntoView {
         if show_shuffle.get_untracked() {
             return;
         }
-
-        // Do all game mutations in one borrow, extract results
         let outcome = GAME.with_borrow_mut(|gs| {
             let result = gs.check_answer(action);
             let shoe_done = if result.is_some() {
@@ -125,8 +121,6 @@ fn App() -> impl IntoView {
             };
             (result, shoe_done)
         });
-
-        // Update signals with no borrow held
         if let (Some(result), shoe_done) = outcome {
             if result.correct {
                 status_text.set(format!("Correct: {}", result.player_action));
@@ -182,14 +176,12 @@ fn App() -> impl IntoView {
             if matches!(tag.as_deref(), Some("INPUT" | "TEXTAREA" | "SELECT")) {
                 return;
             }
-
             let key = e.key();
             if key == "Tab" {
                 e.prevent_default();
                 show_histogram.update(|v| *v = !*v);
                 return;
             }
-            // On histogram screen, only Tab works
             if show_histogram.get_untracked() {
                 return;
             }
@@ -219,23 +211,30 @@ fn App() -> impl IntoView {
     let toggle_histogram = move |_| show_histogram.update(|v| *v = !*v);
 
     view! {
-        <div class="app">
-            <div class="mode-bar">
-                <span class="label">"Mode: "</span>
-                <span class="mode-name">{move || mode_text.get()}</span>
-                <button class="mode-btn" class:hidden=move || show_histogram.get() on:click=move |_| cycle_mode()>"(M) Next"</button>
-                <button class="mode-btn tab-btn" on:click=toggle_histogram>
+        <div class="w-full max-w-xl px-4">
+            // Mode bar
+            <div class="flex items-center gap-4 mb-4 py-2 border-b border-gray-700">
+                <span class="font-bold text-gray-400">"Mode: "</span>
+                <span class="font-bold text-amber-300">{move || mode_text.get()}</span>
+                <button
+                    class="text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
+                    class:hidden=move || show_histogram.get()
+                    on:click=move |_| cycle_mode()
+                >"(M) Next"</button>
+                <button
+                    class="ml-auto text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
+                    on:click=toggle_histogram
+                >
                     {move || if show_histogram.get() { "Back (Tab)" } else { "Stats (Tab)" }}
                 </button>
             </div>
 
             // Histogram screen
-            <div class="histogram-screen" class:hidden=move || !show_histogram.get()>
-                <div class="histogram-title">"Spaced Repetition Buckets"</div>
-                <div class="histogram-chart">
+            <div class:hidden=move || !show_histogram.get()>
+                <h2 class="font-bold text-cyan-400 text-lg mb-4">"Spaced Repetition Buckets"</h2>
+                <div class="space-y-1.5">
                     {move || {
                         let counts = box_counts.get();
-                        let _unseen = unseen_count.get();
                         let max_val = counts.iter().copied().max().unwrap_or(1).max(1);
                         let labels = ["20s", "1m", "5m", "30m", "2h", "6h", "1d", "3d", "1w"];
                         let colors = ["#ff6b6b", "#e03131", "#ffd43b", "#fab005", "#66d9e8", "#22b8cf", "#4dabf7", "#51cf66", "#8ce99a"];
@@ -245,114 +244,109 @@ fn App() -> impl IntoView {
                             let color = colors[i];
                             let label = labels[i];
                             view! {
-                                <div class="histogram-bar-row">
-                                    <span class="histogram-label">{format!("B{} ({})", i, label)}</span>
-                                    <div class="histogram-bar-bg">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-22 text-right text-sm text-gray-400 shrink-0">{format!("B{} ({})", i, label)}</span>
+                                    <div class="flex-1 h-5 bg-slate-800 rounded overflow-hidden">
                                         <div class="histogram-bar-fill"
                                              style:width=format!("{}%", pct)
                                              style:background-color=color>
                                         </div>
                                     </div>
-                                    <span class="histogram-count">{count}</span>
+                                    <span class="w-10 text-right text-sm shrink-0">{count}</span>
                                 </div>
                             }
                         }).collect::<Vec<_>>()
                     }}
-                    <div class="histogram-unseen">
-                        <span class="label">"Unseen: "</span>
-                        <span>{move || unseen_count.get()}</span>
-                    </div>
+                </div>
+                <div class="mt-4 text-sm text-gray-500">
+                    <span class="font-bold">"Unseen: "</span>
+                    <span>{move || unseen_count.get()}</span>
                 </div>
             </div>
 
             // Play screen
-            <div class="play-screen" class:hidden=move || show_histogram.get()>
-
-            <div class="stats-panel">
-                <div class="panel-title">"Stats"</div>
-                <div class="stats-content">
-                    <div class="stats-row">
-                        <span class="label">"Hands: "</span>
+            <div class:hidden=move || show_histogram.get()>
+                // Stats panel
+                <div class="border border-gray-700 rounded-md px-4 py-3 mb-6">
+                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Stats"</div>
+                    <div>
+                        <span class="font-bold text-gray-400">"Hands: "</span>
                         <span>{move || score_text.get()}</span>
                     </div>
-                    <div class="stats-row sub-stats">
-                        <span><span class="label">"Hard: "</span>{move || hard_stat.get()}</span>
-                        <span><span class="label">"Soft: "</span>{move || soft_stat.get()}</span>
-                        <span><span class="label">"Split: "</span>{move || split_stat.get()}</span>
-                        <span><span class="label">"Dbl: "</span>{move || double_stat.get()}</span>
+                    <div class="flex gap-6 mt-1">
+                        <span><span class="font-bold text-gray-400">"Hard: "</span>{move || hard_stat.get()}</span>
+                        <span><span class="font-bold text-gray-400">"Soft: "</span>{move || soft_stat.get()}</span>
+                        <span><span class="font-bold text-gray-400">"Split: "</span>{move || split_stat.get()}</span>
+                        <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || double_stat.get()}</span>
                     </div>
                 </div>
-            </div>
 
-            <div class="hands-area">
-                <div class="hand-row">
-                    <span class="hand-label">"Dealer: "</span>
-                    <span class="cards">{move || dealer_text.get()}</span>
+                // Hands
+                <div class="mb-6">
+                    <div class="text-xl py-1">
+                        <span class="font-bold text-cyan-400">"Dealer: "</span>
+                        <span class="text-2xl tracking-wide">{move || dealer_text.get()}</span>
+                    </div>
+                    <div class="text-xl py-1">
+                        <span class="font-bold text-cyan-400">"Player: "</span>
+                        <span class="text-2xl tracking-wide">{move || player_text.get()}</span>
+                    </div>
                 </div>
-                <div class="hand-row">
-                    <span class="hand-label">"Player: "</span>
-                    <span class="cards">{move || player_text.get()}</span>
+
+                // Status message
+                <div
+                    class="text-center px-4 py-2 rounded font-bold text-lg mb-6"
+                    class:hidden=move || !status_visible.get()
+                    class:bg-green-900=move || !status_is_error.get()
+                    class:text-green-300=move || !status_is_error.get()
+                    class:bg-red-900=move || status_is_error.get()
+                    class:text-red-200=move || status_is_error.get()
+                >
+                    {move || status_text.get()}
                 </div>
-            </div>
 
-            <div
-                class="status"
-                class:error=move || status_is_error.get()
-                class:correct=move || !status_is_error.get()
-                class:hidden=move || !status_visible.get()
-            >
-                {move || status_text.get()}
-            </div>
+                // Action buttons
+                <div class="flex flex-wrap gap-3 justify-center mb-6">
+                    <button
+                        class="px-5 py-2.5 border border-green-700 rounded-md bg-green-950 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-green-900 hover:border-green-500"
+                        class:hidden=move || !show_shuffle.get()
+                        on:click=move |_| do_shuffle()
+                    >
+                        "Shuffle New Shoe"
+                    </button>
+                    <button
+                        class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
+                        class:hidden=move || show_shuffle.get()
+                        on:click=move |_| do_action(Action::Hit)
+                    >"(H)it"</button>
+                    <button
+                        class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
+                        class:hidden=move || show_shuffle.get()
+                        on:click=move |_| do_action(Action::Stand)
+                    >"(S)tand"</button>
+                    <button
+                        class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
+                        class:hidden=move || show_shuffle.get()
+                        on:click=move |_| do_action(Action::Double)
+                    >"(D)ouble"</button>
+                    <button
+                        class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
+                        class:hidden=move || show_shuffle.get()
+                        on:click=move |_| do_action(Action::Split)
+                    >"S(p)lit"</button>
+                </div>
 
-            <div class="actions">
-                <button
-                    class="action-btn shuffle-btn"
-                    class:hidden=move || !show_shuffle.get()
-                    on:click=move |_| do_shuffle()
-                >
-                    "Shuffle New Shoe"
-                </button>
-                <button
-                    class="action-btn"
-                    class:hidden=move || show_shuffle.get()
-                    on:click=move |_| do_action(Action::Hit)
-                >
-                    "(H)it"
-                </button>
-                <button
-                    class="action-btn"
-                    class:hidden=move || show_shuffle.get()
-                    on:click=move |_| do_action(Action::Stand)
-                >
-                    "(S)tand"
-                </button>
-                <button
-                    class="action-btn"
-                    class:hidden=move || show_shuffle.get()
-                    on:click=move |_| do_action(Action::Double)
-                >
-                    "(D)ouble"
-                </button>
-                <button
-                    class="action-btn"
-                    class:hidden=move || show_shuffle.get()
-                    on:click=move |_| do_action(Action::Split)
-                >
-                    "S(p)lit"
-                </button>
-            </div>
-
-            <div class="error-log">
-                <div class="panel-title">"Mistakes"</div>
-                <div class="log-entries">
+                // Error log
+                <div class="border border-gray-700 rounded-md px-4 py-3 mb-6 max-h-72 overflow-y-auto">
+                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Mistakes"</div>
                     {move || {
                         errors
                             .get()
                             .into_iter()
                             .map(|e| {
                                 view! {
-                                    <div class="log-entry">
-                                        <span class="error-marker">"Error: "</span>
+                                    <div class="py-1 border-b border-gray-800 text-sm">
+                                        <span class="font-bold text-red-400">"Error: "</span>
                                         {e}
                                     </div>
                                 }
@@ -362,9 +356,8 @@ fn App() -> impl IntoView {
                 </div>
             </div>
 
-            </div> // end play-screen
-
-            <div class="keyboard-hint">"Keyboard: h / s / d / p / m (mode) / Tab (stats)"</div>
+            // Keyboard hint
+            <div class="text-center text-gray-600 text-xs py-4">"Keyboard: h / s / d / p / m (mode) / Tab (stats)"</div>
         </div>
     }
 }

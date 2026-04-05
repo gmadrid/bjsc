@@ -1,0 +1,4 @@
+[[hooks]]
+stage = "pre_build"
+command = "pnpm"
+command_arguments = ["exec", "tailwindcss", "-i", "styles/input.css", "-o", "styles/output.css"]

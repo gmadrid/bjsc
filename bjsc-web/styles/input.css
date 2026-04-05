@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@source "../src/**/*.rs";
+
+@theme {
+    --font-mono: 'Menlo', 'Consolas', 'Monaco', monospace;
+}
+
+/* Custom utilities that Tailwind doesn't cover */
+@utility histogram-bar-fill {
+    height: 100%;
+    border-radius: 0.25rem;
+    transition: width 0.3s ease;
+    min-width: 2px;
+}
