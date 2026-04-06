@@ -53,7 +53,7 @@ pub async fn upsert_user_deck(
     mode: StudyMode,
     deck: &Deck,
 ) -> Result<(), String> {
-    let req = upsert_deck_request(config, token, user_id, mode, deck);
+    let req = upsert_deck_request(config, token, user_id, mode, deck)?;
     let resp = client
         .request(&req.method, &req.url, &req.headers, req.body.as_deref())
         .await?;
@@ -71,7 +71,7 @@ pub async fn insert_answer_log(
     token: &str,
     row: &AnswerLogRow,
 ) -> Result<(), String> {
-    let req = insert_answer_log_request(config, token, row);
+    let req = insert_answer_log_request(config, token, row)?;
     let resp = client
         .request(&req.method, &req.url, &req.headers, req.body.as_deref())
         .await?;

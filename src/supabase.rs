@@ -88,7 +88,7 @@ pub fn upsert_deck_request(
     user_id: &str,
     mode: StudyMode,
     deck: &Deck,
-) -> RequestDetails {
+) -> Result<RequestDetails, String> {
     let mut headers = common_headers(config, access_token);
     headers.push(("Content-Type".to_string(), "application/json".to_string()));
     // Upsert: insert or update on conflict
@@ -105,12 +105,12 @@ pub fn upsert_deck_request(
         updated_at: None, // let the DB set this
     };
 
-    RequestDetails {
+    Ok(RequestDetails {
         url: format!("{}/rest/v1/user_deck?on_conflict=user_id", config.base_url),
         method: "POST".to_string(),
         headers,
-        body: Some(serde_json::to_string(&row).unwrap_or_default()),
-    }
+        body: Some(serde_json::to_string(&row).map_err(|e| e.to_string())?),
+    })
 }
 
 /// Row for the answer_log table.
@@ -128,16 +128,16 @@ pub fn insert_answer_log_request(
     config: &SupabaseConfig,
     access_token: &str,
     row: &AnswerLogRow,
-) -> RequestDetails {
+) -> Result<RequestDetails, String> {
     let mut headers = common_headers(config, access_token);
     headers.push(("Content-Type".to_string(), "application/json".to_string()));
 
-    RequestDetails {
+    Ok(RequestDetails {
         url: format!("{}/rest/v1/answer_log", config.base_url),
         method: "POST".to_string(),
         headers,
-        body: Some(serde_json::to_string(row).unwrap_or_default()),
-    }
+        body: Some(serde_json::to_string(row).map_err(|e| e.to_string())?),
+    })
 }
 
 /// Build a request to fetch answer logs for stats (recent N entries).
