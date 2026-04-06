@@ -185,11 +185,11 @@ Based on this data, give me coaching advice: what patterns do you see in my mist
     );
 
     if (!claudeResponse.ok) {
-      const errorText = await claudeResponse.text();
+      console.error("Claude API error:", await claudeResponse.text());
       return new Response(
-        JSON.stringify({ error: `Claude API error: ${errorText}` }),
+        JSON.stringify({ error: "Coaching service temporarily unavailable." }),
         {
-          status: 500,
+          status: 502,
           headers: { ...corsHeaders(req), "Content-Type": "application/json" },
         },
       );
@@ -203,8 +203,9 @@ Based on this data, give me coaching advice: what patterns do you see in my mist
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (err) {
+    console.error("Coaching function error:", err);
     return new Response(
-      JSON.stringify({ error: `Internal error: ${err.message}` }),
+      JSON.stringify({ error: "An unexpected error occurred." }),
       {
         status: 500,
         headers: { ...corsHeaders(req), "Content-Type": "application/json" },
