@@ -394,6 +394,42 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 return;
             }
             let key = e.key();
+
+            // Escape toggles the slide-out menu from any screen
+            if key == "Escape" {
+                menu_open.set(!menu_open.get_untracked());
+                return;
+            }
+
+            // Screen shortcuts when menu is open
+            if menu_open.get_untracked() {
+                match key.as_str() {
+                    "p" => {
+                        go_to_screen(Screen::Play);
+                        return;
+                    }
+                    "s" => {
+                        go_to_screen(Screen::Stats);
+                        return;
+                    }
+                    "g" => {
+                        go_to_screen(Screen::Progress);
+                        return;
+                    }
+                    "c" => {
+                        go_to_screen(Screen::Coach);
+                        return;
+                    }
+                    "t" => {
+                        go_to_screen(Screen::Strategy);
+                        return;
+                    }
+                    _ => {}
+                }
+                return;
+            }
+
+            // Play screen actions
             if screen.get_untracked() != Screen::Play {
                 return;
             }
