@@ -62,6 +62,7 @@ pub(crate) struct App {
     pub(crate) confirm_quit: bool,
     pub(crate) strategy_tab: StrategyTab,
     pub(crate) strategy_scroll: u16,
+    pub(crate) drill_waiting: bool,
 }
 
 impl App {
@@ -93,7 +94,7 @@ impl App {
             }
         }
 
-        game_state.deal_a_hand();
+        let dealt = game_state.deal_a_hand();
 
         let status = if game_state.study_mode() != bjsc::StudyMode::All {
             StatusMessage::Correct(format!("Resumed: {}", game_state.study_mode()))
@@ -123,6 +124,7 @@ impl App {
             confirm_quit: false,
             strategy_tab: StrategyTab::Descriptive,
             strategy_scroll: 0,
+            drill_waiting: !dealt,
         }
     }
 
@@ -260,10 +262,16 @@ impl App {
             return false;
         }
 
+        // In drill waiting mode, block play actions (mode change and menu still allowed)
+        if self.drill_waiting && code != KeyCode::Char('m') && code != KeyCode::Esc {
+            return false;
+        }
+
         if code == KeyCode::Char('m') {
             let new_mode = self.game_state.study_mode().next();
             self.game_state.set_study_mode(new_mode);
-            self.game_state.deal_a_hand();
+            let dealt = self.game_state.deal_a_hand();
+            self.drill_waiting = !dealt && new_mode == bjsc::StudyMode::Drill;
             self.status = StatusMessage::None;
             self.save();
             return false;
@@ -295,7 +303,11 @@ impl App {
             }
 
             if !self.game_state.deal_a_hand() {
-                self.show_shuffle_prompt = true;
+                if self.game_state.study_mode() == bjsc::StudyMode::Drill {
+                    self.drill_waiting = true;
+                } else {
+                    self.show_shuffle_prompt = true;
+                }
             }
         }
         false
@@ -513,6 +525,13 @@ fn main() -> io::Result<()> {
     loop {
         app.poll_coaching();
         app.poll_sync_errors();
+        // In drill waiting mode, try to deal when a card becomes due
+        if app.drill_waiting {
+            let ready = app.game_state.drill_wait_secs().is_none();
+            if ready && app.game_state.deal_a_hand() {
+                app.drill_waiting = false;
+            }
+        }
         draw::draw(&mut terminal, &app)?;
 
         if event::poll(std::time::Duration::from_millis(100))? {

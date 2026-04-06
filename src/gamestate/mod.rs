@@ -120,6 +120,16 @@ impl GameState {
         self.deck.unseen_count(&keys)
     }
 
+    /// In Drill mode, returns seconds until the next card becomes due.
+    /// Returns `None` if cards are already due, unseen, or not in Drill mode.
+    pub fn drill_wait_secs(&self) -> Option<u64> {
+        if self.study_mode != StudyMode::Drill {
+            return None;
+        }
+        let keys = keys_for_mode(StudyMode::Drill);
+        self.deck.next_due_in(&keys)
+    }
+
     pub fn set_deck(&mut self, deck: Deck) {
         self.deck = deck;
     }
@@ -256,9 +266,15 @@ impl GameState {
     }
 
     /// Deal based on spaced repetition selection.
+    /// Returns false if no items are due (all seen and none past their interval).
     fn deal_drill(&mut self) -> bool {
         let keys = keys_for_mode(StudyMode::Drill);
         if keys.is_empty() {
+            return false;
+        }
+        // Only deal if there are due or unseen items
+        let due = self.deck.due_items(&keys);
+        if due.is_empty() {
             return false;
         }
         let key = self.deck.next_item(&keys).unwrap_or(&keys[0]);

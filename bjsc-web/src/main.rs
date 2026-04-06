@@ -57,6 +57,40 @@ fn main() {
     leptos::mount::mount_to_body(App);
 }
 
+/// Schedule a timer to auto-refresh the display when the next drill card becomes due.
+fn schedule_drill_timer(timer_id: RwSignal<Option<i32>>, game_display: RwSignal<DisplayData>) {
+    // Clear existing timer
+    if let Some(id) = timer_id.get_untracked() {
+        if let Some(w) = web_sys::window() {
+            w.clear_timeout_with_handle(id);
+        }
+        timer_id.set(None);
+    }
+
+    let wait = GAME.with_borrow(|gs| gs.drill_wait_secs());
+    if let Some(secs) = wait {
+        let cb = Closure::<dyn FnMut()>::new(move || {
+            // Try to deal
+            GAME.with_borrow_mut(|gs| {
+                gs.deal_a_hand();
+            });
+            game_display.set(read_display());
+            // If still waiting, reschedule
+            schedule_drill_timer(timer_id, game_display);
+        });
+        if let Some(w) = web_sys::window() {
+            let ms = ((secs + 1).saturating_mul(1000)).min(i32::MAX as u64) as i32;
+            if let Ok(id) = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                cb.as_ref().unchecked_ref(),
+                ms,
+            ) {
+                timer_id.set(Some(id));
+            }
+        }
+        cb.forget();
+    }
+}
+
 #[derive(Clone, Default)]
 struct DisplayData {
     dealer: String,
@@ -74,6 +108,7 @@ struct DisplayData {
     mastered_count: u32,
     due_count: u32,
     mode_key: String,
+    drill_wait_secs: Option<u64>,
 }
 
 fn read_display() -> DisplayData {
@@ -96,6 +131,7 @@ fn read_display() -> DisplayData {
             weak_count: ds.weak,
             mastered_count: ds.mastered,
             due_count: ds.due,
+            drill_wait_secs: gs.drill_wait_secs(),
         }
     })
 }
@@ -195,6 +231,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let progress_stats: RwSignal<bjsc::progress::ProgressStats> =
         RwSignal::new(bjsc::progress::ProgressStats::default());
     let loading = RwSignal::new(true);
+    let drill_timer_id: RwSignal<Option<i32>> = RwSignal::new(None);
 
     let sync_all = move || {
         game_display.set(read_display());
@@ -247,15 +284,21 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             }
             loading.set(false);
             sync_all();
+            schedule_drill_timer(drill_timer_id, game_display);
         });
     } else {
         web_sys::console::warn_1(&"Auth state missing on mount, using local data.".into());
         loading.set(false);
         sync_all();
+        schedule_drill_timer(drill_timer_id, game_display);
     }
 
     let do_action = move |action: Action| {
         if show_shuffle.get_untracked() || loading.get_untracked() {
+            return;
+        }
+        // Block actions when waiting for next drill card
+        if game_display.get_untracked().drill_wait_secs.is_some() {
             return;
         }
         let outcome = GAME.with_borrow_mut(|gs| {
@@ -290,6 +333,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             }
         }
         sync_all();
+        schedule_drill_timer(drill_timer_id, game_display);
     };
 
     let do_shuffle = move || {
@@ -309,6 +353,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         status_visible.set(false);
         show_shuffle.set(false);
         sync_all();
+        schedule_drill_timer(drill_timer_id, game_display);
 
         // Save mode change to cloud immediately
         if let Some(auth) = auth_state.get_untracked() {
@@ -805,8 +850,25 @@ fn PlayScreen(
                 </div>
             </div>
 
-            // Hands
-            <div class="mb-6">
+            // Drill waiting message
+            <div
+                class="text-center py-8 mb-6 border border-yellow-800 rounded-md bg-yellow-950"
+                class:hidden=move || game_data.get().drill_wait_secs.is_none()
+            >
+                <div class="text-yellow-400 text-lg font-bold mb-2">
+                    "\u{23F3} All cards reviewed!"
+                </div>
+                <div class="text-yellow-300 text-sm">
+                    {move || {
+                        game_data.get().drill_wait_secs.map(|secs| {
+                            format!("Next card due in {}", bjsc::format_wait_time(secs))
+                        }).unwrap_or_default()
+                    }}
+                </div>
+            </div>
+
+            // Hands (hidden when drill waiting)
+            <div class="mb-6" class:hidden=move || game_data.get().drill_wait_secs.is_some()>
                 <div class="text-xl py-1">
                     <span class="font-bold text-cyan-400">"Dealer: "</span>
                     <span class="text-2xl tracking-wide">{move || game_data.get().dealer.clone()}</span>
@@ -817,10 +879,10 @@ fn PlayScreen(
                 </div>
             </div>
 
-            // Status message
+            // Status message (hidden when drill waiting)
             <div
                 class="text-center px-4 py-2 rounded font-bold text-lg mb-6"
-                class:hidden=move || !status_visible.get()
+                class:hidden=move || !status_visible.get() || game_data.get().drill_wait_secs.is_some()
                 class:bg-green-900=move || !status_is_error.get()
                 class:text-green-300=move || !status_is_error.get()
                 class:bg-red-900=move || status_is_error.get()
@@ -829,8 +891,11 @@ fn PlayScreen(
                 {move || status_text.get()}
             </div>
 
-            // Action buttons
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 justify-center mb-6">
+            // Action buttons (hidden when drill waiting)
+            <div
+                class="grid grid-cols-2 sm:grid-cols-4 gap-3 justify-center mb-6"
+                class:hidden=move || game_data.get().drill_wait_secs.is_some()
+            >
                 <button
                     class="col-span-2 sm:col-span-4 px-5 py-2.5 border border-green-700 rounded-md bg-green-950 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-green-900 hover:border-green-500"
                     class:hidden=move || !show_shuffle.get()

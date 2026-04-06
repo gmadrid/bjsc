@@ -266,6 +266,31 @@ impl Deck {
         }
     }
 
+    /// Seconds until the next candidate becomes due, or `None` if any are already due/unseen.
+    pub fn next_due_in(&self, candidates: &[String]) -> Option<u64> {
+        let now = now_secs();
+        let mut earliest: Option<u64> = None;
+
+        for key in candidates {
+            match self.items.get(key.as_str()) {
+                None => return None, // unseen item is immediately due
+                Some(item) => {
+                    if item.is_due(now) {
+                        return None; // already due
+                    }
+                    let due_at = item.last_reviewed + item.interval();
+                    let wait = due_at.saturating_sub(now);
+                    earliest = Some(match earliest {
+                        Some(e) => e.min(wait),
+                        None => wait,
+                    });
+                }
+            }
+        }
+
+        earliest
+    }
+
     /// Number of items being tracked.
     pub fn len(&self) -> usize {
         self.items.len()
@@ -392,6 +417,55 @@ mod tests {
         let candidates = vec!["a".to_string(), "b".to_string()];
         let due = deck.due_items(&candidates);
         assert_eq!(due.len(), 2);
+    }
+
+    #[test]
+    fn test_next_due_in_returns_none_when_unseen() {
+        let deck = Deck::new();
+        let candidates = vec!["a".to_string(), "b".to_string()];
+        assert!(deck.next_due_in(&candidates).is_none());
+    }
+
+    #[test]
+    fn test_next_due_in_returns_none_when_due() {
+        let mut deck = Deck::new();
+        deck.record("a", true);
+        make_due(&mut deck, "a");
+        let candidates = vec!["a".to_string()];
+        assert!(deck.next_due_in(&candidates).is_none());
+    }
+
+    #[test]
+    fn test_next_due_in_returns_some_when_all_seen_not_due() {
+        let mut deck = Deck::new();
+        deck.record("a", true); // box 1, interval 60s
+        let candidates = vec!["a".to_string()];
+        let wait = deck.next_due_in(&candidates);
+        assert!(wait.is_some());
+        // Should be roughly 60 seconds (box 1 interval)
+        assert!(wait.unwrap() <= 60);
+        assert!(wait.unwrap() > 0);
+    }
+
+    #[test]
+    fn test_next_due_in_returns_minimum_across_items() {
+        let mut deck = Deck::new();
+        deck.record("a", true); // box 1, interval 60s
+        make_due(&mut deck, "a");
+        deck.record("a", true); // box 2, interval 300s
+        deck.record("b", true); // box 1, interval 60s
+        let candidates = vec!["a".to_string(), "b".to_string()];
+        let wait = deck.next_due_in(&candidates);
+        assert!(wait.is_some());
+        // b has shorter interval (60s) than a (300s)
+        assert!(wait.unwrap() <= 60);
+    }
+
+    #[test]
+    fn test_next_due_in_empty_candidates() {
+        let deck = Deck::new();
+        // No candidates means no items to wait for — returns None
+        assert!(deck.next_due_in(&[]).is_none());
     }
 
     #[test]

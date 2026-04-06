@@ -42,8 +42,42 @@ pub fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
 
     let summary = app.game_state.deck_summary();
     draw_stats(f, chunks[1], app.game_state.stats(), &summary);
-    draw_hand(f, chunks[2], "Dealer", app.game_state.dealer_hand());
-    draw_hand(f, chunks[3], "Player", app.game_state.player_hand());
+
+    if app.drill_waiting {
+        // Show waiting message instead of cards
+        let wait_msg = if let Some(secs) = app.game_state.drill_wait_secs() {
+            format!(
+                "All cards reviewed! Next card due in {}",
+                bjsc::format_wait_time(secs)
+            )
+        } else {
+            "All cards reviewed! Next card due soon...".to_string()
+        };
+        let waiting = Paragraph::new(Line::from(vec![
+            Span::styled("⏳ ", Style::default().fg(Color::Yellow)),
+            Span::styled(wait_msg, Style::default().fg(Color::Yellow)),
+        ]))
+        .alignment(ratatui::layout::Alignment::Center);
+        // Use both hand areas for the message
+        let combined = Rect::new(
+            chunks[2].x,
+            chunks[2].y,
+            chunks[2].width,
+            chunks[2].height + chunks[3].height,
+        );
+        let centered = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(0),
+                Constraint::Length(1),
+                Constraint::Min(0),
+            ])
+            .split(combined);
+        f.render_widget(waiting, centered[1]);
+    } else {
+        draw_hand(f, chunks[2], "Dealer", app.game_state.dealer_hand());
+        draw_hand(f, chunks[3], "Player", app.game_state.player_hand());
+    }
 
     let status_widget = match &app.status {
         StatusMessage::Correct(msg) => {
@@ -109,6 +143,9 @@ pub fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )
+    } else if app.drill_waiting {
+        Paragraph::new("Waiting for next card... (M)ode | Esc:Menu")
+            .style(Style::default().fg(Color::DarkGray))
     } else {
         Paragraph::new("(H)it | (S)tand | (D)ouble | S(P)lit | (M)ode | Esc:Menu")
     };
