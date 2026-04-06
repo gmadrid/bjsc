@@ -54,6 +54,18 @@ impl StudyMode {
         }
     }
 
+    /// Icon/emoji for each mode.
+    pub fn icon(&self) -> &'static str {
+        match self {
+            StudyMode::All => "\u{1F0CF}",  // 🃏 joker
+            StudyMode::Drill => "\u{25CE}", // ◎ bullseye
+            StudyMode::Hard => "\u{1F4AA}", // 💪 flexed biceps
+            StudyMode::Soft => "A2",
+            StudyMode::Splits => "AA",
+            StudyMode::Doubles => "\u{23EC}", // ⏬ double down
+        }
+    }
+
     /// All variants in display order.
     pub const ALL: [StudyMode; 6] = [
         StudyMode::All,

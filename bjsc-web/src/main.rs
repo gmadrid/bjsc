@@ -473,25 +473,52 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                     {move || screen.get().title()}
                 </h1>
                 // Mode selector (play screen only)
-                <select
-                    id="mode-select"
-                    aria-label="Study mode"
-                    class="text-sm px-2 py-1 border border-gray-600 rounded bg-slate-800 text-amber-300 font-bold cursor-pointer hover:border-cyan-400 focus:border-cyan-400 focus:outline-none"
-                    class:hidden=move || screen.get() != Screen::Play
-                    on:change=move |ev| {
-                        let val = leptos::prelude::event_target_value(&ev);
-                        if let Some(mode) = bjsc::StudyMode::from_key(&val) {
-                            set_mode(mode);
-                        }
+                {
+                    let mode_dropdown_open = RwSignal::new(false);
+                    view! {
+                        <div class="relative" class:hidden=move || screen.get() != Screen::Play>
+                            <button
+                                aria-label="Study mode"
+                                class="text-sm px-2 py-1 border border-gray-600 rounded bg-slate-800 cursor-pointer hover:border-cyan-400 text-amber-300"
+                                on:click=move |_| mode_dropdown_open.set(!mode_dropdown_open.get_untracked())
+                            >
+                                {move || {
+                                    let key = game_display.get().mode_key;
+                                    bjsc::StudyMode::from_key(&key).map(|m| m.icon()).unwrap_or("\u{1F0CF}")
+                                }}
+                                <span class="hidden sm:inline ml-2 text-gray-200">
+                                    {move || {
+                                        let key = game_display.get().mode_key;
+                                        bjsc::StudyMode::from_key(&key).map(|m| m.to_string()).unwrap_or_default()
+                                    }}
+                                </span>
+                            </button>
+                            <div
+                                class="absolute top-full left-0 mt-1 bg-slate-800 border border-gray-600 rounded shadow-lg z-30 w-48"
+                                class:hidden=move || !mode_dropdown_open.get()
+                            >
+                                {bjsc::StudyMode::ALL.iter().map(|m| {
+                                    let mode = *m;
+                                    let icon = m.icon();
+                                    let label = m.to_string();
+                                    view! {
+                                        <button
+                                            class="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-700 cursor-pointer"
+                                            class:text-amber-300=move || game_display.get().mode_key == mode.key()
+                                            class:text-gray-300=move || game_display.get().mode_key != mode.key()
+                                            on:click=move |_| {
+                                                set_mode(mode);
+                                                mode_dropdown_open.set(false);
+                                            }
+                                        >
+                                            {format!("{} {}", icon, label)}
+                                        </button>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        </div>
                     }
-                    prop:value=move || game_display.get().mode_key
-                >
-                    {bjsc::StudyMode::ALL.iter().map(|m| {
-                        let key = m.key();
-                        let label = m.to_string();
-                        view! { <option value={key}>{label}</option> }
-                    }).collect::<Vec<_>>()}
-                </select>
+                }
                 // Username + hamburger menu (right side)
                 <span class="ml-auto text-xs text-gray-500">{move || auth_state.get().map(|a| a.email).unwrap_or_default()}</span>
                 <button
