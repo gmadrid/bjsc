@@ -36,8 +36,11 @@ impl FromStr for Card {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let trimmed = s.trim();
+        if trimmed.len() < 2 {
+            return Err(BadPipValue(trimmed.to_string()));
+        }
         let suit_str = &trimmed[trimmed.len() - 1..];
-        let pip_str = &trimmed[0..trimmed.len() - 1].trim();
+        let pip_str = trimmed[..trimmed.len() - 1].trim();
 
         let suit = suit_str.parse()?;
         let pip = pip_str.parse()?;
@@ -237,6 +240,13 @@ mod test {
         assert_eq!(card(Pip::Seven, Suit::Spades), "7S".parse().unwrap());
         assert_eq!(card(Pip::Eight, Suit::Spades), "8S".parse().unwrap());
         assert_eq!(card(Pip::Nine, Suit::Spades), "9S".parse().unwrap());
+    }
+
+    #[test]
+    fn test_parse_empty_string() {
+        assert!("".parse::<Card>().is_err());
+        assert!(" ".parse::<Card>().is_err());
+        assert!("S".parse::<Card>().is_err());
     }
 
     #[test]
