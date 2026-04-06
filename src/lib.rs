@@ -20,7 +20,10 @@ pub use hand::Hand;
 pub use hand_builder::build_hand_for_index;
 pub use persistence::SavedState;
 pub use spaced_rep::{DeckSummary, BOX_LABELS};
-pub use strat::{phrase_for_row, Action, ChartAction, TableIndex, TableType};
+pub use strat::{
+    all_charts, all_phrases, phrase_for_row, Action, ChartAction, StrategyChart, TableIndex,
+    TableType,
+};
 pub use studymode::StudyMode;
 pub use supabase::{AuthSession, SupabaseConfig};
 pub use table_index_keys::{indices_for_mode, keys_for_mode};

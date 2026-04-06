@@ -30,6 +30,13 @@ enum Screen {
     Histogram,
     Progress,
     Coach,
+    Strategy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum StrategyTab {
+    Descriptive,
+    Tables,
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +65,8 @@ struct App {
     sync_error_rx: mpsc::Receiver<String>,
     screen_picker: Option<usize>,
     confirm_quit: bool,
+    strategy_tab: StrategyTab,
+    strategy_scroll: u16,
 }
 
 impl App {
@@ -117,6 +126,8 @@ impl App {
             sync_error_rx,
             screen_picker: None,
             confirm_quit: false,
+            strategy_tab: StrategyTab::Descriptive,
+            strategy_scroll: 0,
         }
     }
 
@@ -126,6 +137,7 @@ impl App {
             Screen::Histogram => 1,
             Screen::Progress => 2,
             Screen::Coach => 3,
+            Screen::Strategy => 4,
         }
     }
 
@@ -135,6 +147,7 @@ impl App {
             1 => Screen::Histogram,
             2 => Screen::Progress,
             3 => Screen::Coach,
+            4 => Screen::Strategy,
             _ => return,
         };
         self.screen = screen;
@@ -161,11 +174,11 @@ impl App {
         if let Some(ref mut sel) = self.screen_picker {
             match code {
                 KeyCode::Up | KeyCode::Char('k') => *sel = sel.saturating_sub(1),
-                KeyCode::Down | KeyCode::Char('j') => *sel = (*sel + 1).min(4),
+                KeyCode::Down | KeyCode::Char('j') => *sel = (*sel + 1).min(5),
                 KeyCode::Enter => {
                     let idx = *sel;
                     self.screen_picker = None;
-                    if idx == 4 {
+                    if idx == 5 {
                         self.confirm_quit = true;
                     } else {
                         self.go_to_screen(idx);
@@ -187,6 +200,10 @@ impl App {
                     self.screen_picker = None;
                     self.go_to_screen(3);
                 }
+                KeyCode::Char('t') => {
+                    self.screen_picker = None;
+                    self.go_to_screen(4);
+                }
                 KeyCode::Char('q') => {
                     self.screen_picker = None;
                     self.confirm_quit = true;
@@ -199,6 +216,26 @@ impl App {
 
         if code == KeyCode::Esc {
             self.screen_picker = Some(self.screen_index());
+            return false;
+        }
+
+        if self.screen == Screen::Strategy {
+            match code {
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.strategy_scroll = self.strategy_scroll.saturating_add(1)
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.strategy_scroll = self.strategy_scroll.saturating_sub(1)
+                }
+                KeyCode::Tab | KeyCode::Left | KeyCode::Right => {
+                    self.strategy_tab = match self.strategy_tab {
+                        StrategyTab::Descriptive => StrategyTab::Tables,
+                        StrategyTab::Tables => StrategyTab::Descriptive,
+                    };
+                    self.strategy_scroll = 0;
+                }
+                _ => {}
+            }
             return false;
         }
 
@@ -453,6 +490,7 @@ fn draw(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &App) -> io:
             Screen::Histogram => draw_histogram(f, area, app),
             Screen::Progress => draw_progress(f, area, app),
             Screen::Coach => draw_coach(f, area, app),
+            Screen::Strategy => draw_strategy(f, area, app),
         }
         if app.confirm_quit {
             draw_confirm_quit(f, area);
@@ -465,7 +503,7 @@ fn draw(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &App) -> io:
 
 fn draw_screen_picker(f: &mut ratatui::Frame, area: Rect, selected: usize) {
     let width = 24u16;
-    let height = 10u16;
+    let height = 11u16;
     let x = area.x + (area.width.saturating_sub(width)) / 2;
     let y = area.y + (area.height.saturating_sub(height)) / 2;
     let popup = Rect::new(x, y, width, height);
@@ -480,11 +518,12 @@ fn draw_screen_picker(f: &mut ratatui::Frame, area: Rect, selected: usize) {
     f.render_widget(block, popup);
 
     // (index, before_key, key_char, after_key)
-    let entries: [(usize, &str, &str, &str); 4] = [
+    let entries: [(usize, &str, &str, &str); 5] = [
         (0, "", "P", "lay"),
         (1, "", "S", "tats"),
         (2, "Pro", "g", "ress"),
         (3, "", "C", "oach"),
+        (4, "S", "t", "rategy"),
     ];
 
     let mut items: Vec<ListItem> = entries
@@ -521,7 +560,7 @@ fn draw_screen_picker(f: &mut ratatui::Frame, area: Rect, selected: usize) {
     )));
 
     // Quit
-    let is_sel = selected == 4;
+    let is_sel = selected == 5;
     let bg = if is_sel { Color::Red } else { Color::Reset };
     let fg = if is_sel { Color::Black } else { Color::Red };
     let key_fg = if is_sel {
@@ -978,6 +1017,139 @@ fn draw_coach(f: &mut ratatui::Frame, area: Rect, app: &App) {
 
     let hint =
         Paragraph::new("↑/↓: Scroll | Esc: Menu").style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, hint_cols[0]);
+
+    let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));
+    f.render_widget(version, hint_cols[1]);
+}
+
+fn draw_strategy(f: &mut ratatui::Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // title + tab bar
+            Constraint::Min(5),    // content
+            Constraint::Length(1), // hint
+        ])
+        .split(area);
+
+    // Tab bar
+    let desc_style = if app.strategy_tab == StrategyTab::Descriptive {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let table_style = if app.strategy_tab == StrategyTab::Tables {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    let title = Line::from(vec![
+        Span::styled(
+            "Strategy",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  "),
+        Span::styled("Descriptive", desc_style),
+        Span::raw("  |  "),
+        Span::styled("Tables", table_style),
+    ]);
+    f.render_widget(Paragraph::new(title), chunks[0]);
+
+    // Content
+    let block = Block::default().borders(Borders::ALL);
+    let inner = block.inner(chunks[1]);
+    f.render_widget(block, chunks[1]);
+
+    let lines: Vec<Line> = match app.strategy_tab {
+        StrategyTab::Descriptive => {
+            let mut lines = Vec::new();
+            for (category, phrases) in bjsc::all_phrases() {
+                lines.push(Line::from(Span::styled(
+                    category,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )));
+                for phrase in phrases {
+                    lines.push(Line::from(Span::styled(
+                        format!("  {}", phrase),
+                        Style::default().fg(Color::White),
+                    )));
+                }
+                lines.push(Line::default());
+            }
+            lines
+        }
+        StrategyTab::Tables => {
+            let mut lines = Vec::new();
+            for chart in bjsc::all_charts() {
+                lines.push(Line::from(Span::styled(
+                    chart.title,
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )));
+                // Header row
+                let mut header_spans = vec![Span::styled(
+                    format!("{:<6}", ""),
+                    Style::default().fg(Color::DarkGray),
+                )];
+                for h in &chart.col_headers {
+                    header_spans.push(Span::styled(
+                        format!("{:>4}", h),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ));
+                }
+                lines.push(Line::from(header_spans));
+                // Data rows
+                for (label, cells) in &chart.rows {
+                    let mut spans = vec![Span::styled(
+                        format!("{:<6}", label),
+                        Style::default().fg(Color::Gray),
+                    )];
+                    for cell in cells {
+                        let color = match *cell {
+                            "H" => Color::LightRed,
+                            "S" => Color::LightGreen,
+                            "Dh" | "Ds" => Color::Yellow,
+                            "P" | "Pd" => Color::LightBlue,
+                            _ => Color::DarkGray,
+                        };
+                        spans.push(Span::styled(
+                            format!("{:>4}", cell),
+                            Style::default().fg(color),
+                        ));
+                    }
+                    lines.push(Line::from(spans));
+                }
+                lines.push(Line::default());
+            }
+            lines
+        }
+    };
+
+    let text = Paragraph::new(lines)
+        .scroll((app.strategy_scroll, 0))
+        .wrap(ratatui::widgets::Wrap { trim: false });
+    f.render_widget(text, inner);
+
+    // Hint
+    let hint_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(1), Constraint::Length(22)])
+        .split(chunks[2]);
+
+    let hint = Paragraph::new("↑/↓: Scroll | Tab: Switch | Esc: Menu")
+        .style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, hint_cols[0]);
 
     let version = Paragraph::new(env!("BUILD_TIME")).style(Style::default().fg(Color::DarkGray));

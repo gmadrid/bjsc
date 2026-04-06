@@ -120,6 +120,110 @@ pub fn lookup_by_index(index: &TableIndex) -> BjResult<ChartAction> {
     }
 }
 
+/// A displayable strategy chart: row labels, column headers, and cell values.
+pub struct StrategyChart {
+    pub title: &'static str,
+    pub col_headers: Vec<&'static str>,
+    pub rows: Vec<(&'static str, Vec<&'static str>)>,
+}
+
+/// Get all strategy charts for display.
+pub fn all_charts() -> Vec<StrategyChart> {
+    let cols = vec!["2", "3", "4", "5", "6", "7", "8", "9", "T", "A"];
+
+    let action_str = |a: ChartAction| -> &'static str {
+        match a {
+            ChartAction::Hit_ => "H",
+            ChartAction::Stnd => "S",
+            ChartAction::DblH => "Dh",
+            ChartAction::DblS => "Ds",
+            ChartAction::Splt => "P",
+            ChartAction::SDas => "Pd",
+            ChartAction::NoAc => "-",
+        }
+    };
+
+    let hard_rows: Vec<(&str, Vec<&str>)> = (0..10)
+        .map(|r| {
+            let label: &'static str = match r {
+                0 => "8",
+                1 => "9",
+                2 => "10",
+                3 => "11",
+                4 => "12",
+                5 => "13",
+                6 => "14",
+                7 => "15",
+                8 => "16",
+                _ => "17",
+            };
+            let cells: Vec<&str> = (0..10)
+                .map(|c| action_str(hard_chart::HARD_CHART[r][c]))
+                .collect();
+            (label, cells)
+        })
+        .collect();
+
+    let soft_rows: Vec<(&str, Vec<&str>)> = (0..9)
+        .map(|r| {
+            let label: &'static str = match r {
+                0 => "A,2",
+                1 => "A,3",
+                2 => "A,4",
+                3 => "A,5",
+                4 => "A,6",
+                5 => "A,7",
+                6 => "A,8",
+                7 => "A,9",
+                _ => "A,T",
+            };
+            let cells: Vec<&str> = (0..10)
+                .map(|c| action_str(soft_chart::SOFT_CHART[r][c]))
+                .collect();
+            (label, cells)
+        })
+        .collect();
+
+    let split_rows: Vec<(&str, Vec<&str>)> = (0..10)
+        .map(|r| {
+            let label: &'static str = match r {
+                0 => "A,A",
+                1 => "2,2",
+                2 => "3,3",
+                3 => "4,4",
+                4 => "5,5",
+                5 => "6,6",
+                6 => "7,7",
+                7 => "8,8",
+                8 => "9,9",
+                _ => "T,T",
+            };
+            let cells: Vec<&str> = (0..10)
+                .map(|c| action_str(split_chart::SPLIT_CHART[r][c]))
+                .collect();
+            (label, cells)
+        })
+        .collect();
+
+    vec![
+        StrategyChart {
+            title: "Hard Totals",
+            col_headers: cols.clone(),
+            rows: hard_rows,
+        },
+        StrategyChart {
+            title: "Soft Totals",
+            col_headers: cols.clone(),
+            rows: soft_rows,
+        },
+        StrategyChart {
+            title: "Pairs (Split)",
+            col_headers: cols,
+            rows: split_rows,
+        },
+    ]
+}
+
 trait Chart {
     fn lookup_action(
         player_hand: &Hand,

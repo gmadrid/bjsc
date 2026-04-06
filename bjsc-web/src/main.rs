@@ -15,6 +15,7 @@ enum Screen {
     Stats,
     Progress,
     Coach,
+    Strategy,
 }
 
 impl Screen {
@@ -24,6 +25,7 @@ impl Screen {
             Screen::Stats => "Stats",
             Screen::Progress => "Progress",
             Screen::Coach => "Coach",
+            Screen::Strategy => "Strategy",
         }
     }
 }
@@ -511,6 +513,13 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                         class:text-gray-300=move || screen.get() != Screen::Coach
                         on:click=move |_| go_to_screen(Screen::Coach)
                     >"Coach"</button>
+                    <button
+                        class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
+                        class:text-cyan-400=move || screen.get() == Screen::Strategy
+                        class:font-bold=move || screen.get() == Screen::Strategy
+                        class:text-gray-300=move || screen.get() != Screen::Strategy
+                        on:click=move |_| go_to_screen(Screen::Strategy)
+                    >"Strategy"</button>
                 </nav>
                 <div class="border-t border-gray-700 mx-2" />
                 <div class="px-2 py-2">
@@ -524,6 +533,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             <HistogramScreen screen=screen game_data=game_display />
             <ProgressScreen screen=screen progress_stats=progress_stats />
             <CoachScreen screen=screen coaching_text=coaching_text />
+            <StrategyScreen screen=screen />
             <PlayScreen
                 screen=screen game_data=game_display
                 status_text=status_text status_is_error=status_is_error status_visible=status_visible
@@ -807,6 +817,100 @@ fn PlayScreen(
                         })
                         .collect::<Vec<_>>()
                 }}
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn StrategyScreen(screen: RwSignal<Screen>) -> impl IntoView {
+    let tab = RwSignal::new(0u8); // 0 = Descriptive, 1 = Tables
+
+    view! {
+        <div class:hidden=move || screen.get() != Screen::Strategy>
+            // Tab bar
+            <div class="flex gap-4 mb-4 border-b border-gray-700 pb-2">
+                <button
+                    class="text-sm font-bold cursor-pointer"
+                    class:text-cyan-400=move || tab.get() == 0
+                    class:underline=move || tab.get() == 0
+                    class:text-gray-500=move || tab.get() != 0
+                    on:click=move |_| tab.set(0)
+                >"Descriptive"</button>
+                <button
+                    class="text-sm font-bold cursor-pointer"
+                    class:text-cyan-400=move || tab.get() == 1
+                    class:underline=move || tab.get() == 1
+                    class:text-gray-500=move || tab.get() != 1
+                    on:click=move |_| tab.set(1)
+                >"Tables"</button>
+            </div>
+
+            // Descriptive tab
+            <div class:hidden=move || tab.get() != 0>
+                {bjsc::all_phrases().into_iter().map(|(category, phrases)| {
+                    view! {
+                        <div class="mb-4">
+                            <h3 class="font-bold text-cyan-400 mb-1">{category}</h3>
+                            <ul class="space-y-0.5">
+                                {phrases.into_iter().map(|p| {
+                                    view! { <li class="text-sm text-gray-300 ml-4">{p}</li> }
+                                }).collect::<Vec<_>>()}
+                            </ul>
+                        </div>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
+
+            // Tables tab
+            <div class:hidden=move || tab.get() != 1>
+                {bjsc::all_charts().into_iter().map(|chart| {
+                    view! {
+                        <div class="mb-6">
+                            <h3 class="font-bold text-cyan-400 mb-2">{chart.title}</h3>
+                            <div class="overflow-x-auto">
+                                <table class="text-xs font-mono border-collapse">
+                                    <thead>
+                                        <tr>
+                                            <th class="px-2 py-1 text-gray-500"></th>
+                                            {chart.col_headers.iter().map(|h| {
+                                                view! { <th class="px-2 py-1 text-yellow-400 font-bold">{*h}</th> }
+                                            }).collect::<Vec<_>>()}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {chart.rows.iter().map(|(label, cells)| {
+                                            view! {
+                                                <tr>
+                                                    <td class="px-2 py-0.5 text-gray-400 font-bold">{*label}</td>
+                                                    {cells.iter().map(|cell| {
+                                                        let color = match *cell {
+                                                            "H" => "text-red-400",
+                                                            "S" => "text-green-400",
+                                                            "Dh" | "Ds" => "text-yellow-300",
+                                                            "P" | "Pd" => "text-blue-400",
+                                                            _ => "text-gray-600",
+                                                        };
+                                                        view! { <td class=format!("px-2 py-0.5 text-center {}", color)>{*cell}</td> }
+                                                    }).collect::<Vec<_>>()}
+                                                </tr>
+                                            }
+                                        }).collect::<Vec<_>>()}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                }).collect::<Vec<_>>()}
+                <div class="text-xs text-gray-500 mt-2">
+                    <span class="font-bold">"Legend: "</span>
+                    <span class="text-red-400">"H"</span>" = Hit, "
+                    <span class="text-green-400">"S"</span>" = Stand, "
+                    <span class="text-yellow-300">"Dh"</span>" = Double (hit), "
+                    <span class="text-yellow-300">"Ds"</span>" = Double (stand), "
+                    <span class="text-blue-400">"P"</span>" = Split, "
+                    <span class="text-blue-400">"Pd"</span>" = Split (DAS)"
+                </div>
             </div>
         </div>
     }

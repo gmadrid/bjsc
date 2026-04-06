@@ -164,3 +164,48 @@ pub fn phrase_for_row(ri: RowIndex) -> &'static str {
         .get(&ri)
         .unwrap_or(&"Internal Error: RowIndex unrecognized.")
 }
+
+/// All strategy phrases grouped by category, in display order.
+/// Returns Vec of (category_name, Vec<phrase>).
+pub fn all_phrases() -> Vec<(&'static str, Vec<&'static str>)> {
+    let mut result = Vec::new();
+
+    let surrender: Vec<&str> = [15u8, 16]
+        .iter()
+        .filter_map(|&r| RowIndex::new(Surrender, r).ok())
+        .map(phrase_for_row)
+        .collect();
+    result.push(("Surrender", surrender));
+
+    let split: Vec<&str> = [
+        Ace.value() - 10,
+        Two.value(),
+        Three.value(),
+        Four.value(),
+        Five.value(),
+        Six.value(),
+        Seven.value(),
+        Eight.value(),
+        Nine.value(),
+        Ten.value(),
+    ]
+    .iter()
+    .filter_map(|&r| RowIndex::new(Split, r).ok())
+    .map(phrase_for_row)
+    .collect();
+    result.push(("Splits", split));
+
+    let soft: Vec<&str> = (13..=21)
+        .filter_map(|r| RowIndex::new(Soft, r).ok())
+        .map(phrase_for_row)
+        .collect();
+    result.push(("Soft Totals", soft));
+
+    let hard: Vec<&str> = (8..=17)
+        .filter_map(|r| RowIndex::new(Hard, r).ok())
+        .map(phrase_for_row)
+        .collect();
+    result.push(("Hard Totals", hard));
+
+    result
+}
