@@ -370,12 +370,13 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             // Top bar
             <div class="flex items-center gap-4 mb-4 py-2 border-b border-gray-700">
                 // Screen title
-                <span class="font-bold text-cyan-400">
+                <h1 class="font-bold text-cyan-400 text-base m-0">
                     {move || match screen.get() { 0 => "Play", 1 => "Stats", 2 => "Progress", 3 => "Coach", _ => "" }}
-                </span>
+                </h1>
                 // Mode selector (play screen only)
                 <select
                     id="mode-select"
+                    aria-label="Study mode"
                     class="text-sm px-2 py-1 border border-gray-600 rounded bg-slate-800 text-amber-300 font-bold cursor-pointer hover:border-cyan-400 focus:border-cyan-400 focus:outline-none"
                     class:hidden=move || screen.get() != 0
                     on:change=move |ev| {
@@ -396,6 +397,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 </select>
                 // Hamburger menu button (right side)
                 <button
+                    aria-label="Menu"
                     class="ml-auto text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
                     on:click=move |_| menu_open.set(!menu_open.get_untracked())
                 >
@@ -405,12 +407,15 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
 
             // Slide-out menu overlay
             <div
+                role="presentation"
                 class="fixed inset-0 bg-black/50 z-40"
                 class:hidden=move || !menu_open.get()
                 on:click=move |_| menu_open.set(false)
             />
             // Slide-out menu panel
             <div
+                role="navigation"
+                aria-label="Main menu"
                 class="fixed top-0 right-0 h-full w-64 bg-slate-900 border-l border-gray-700 z-50 transform transition-transform duration-200 ease-in-out flex flex-col"
                 class:translate-x-0=move || menu_open.get()
                 class:translate-x-full=move || !menu_open.get()
@@ -699,21 +704,25 @@ fn PlayScreen(
                     "Shuffle New Shoe"
                 </button>
                 <button
+                    aria-label="Hit (H key)"
                     class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
                     class:hidden=move || show_shuffle.get()
                     on:click=move |_| do_action(Action::Hit)
                 >"(H)it"</button>
                 <button
+                    aria-label="Stand (S key)"
                     class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
                     class:hidden=move || show_shuffle.get()
                     on:click=move |_| do_action(Action::Stand)
                 >"(S)tand"</button>
                 <button
+                    aria-label="Double (D key)"
                     class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
                     class:hidden=move || show_shuffle.get()
                     on:click=move |_| do_action(Action::Double)
                 >"(D)ouble"</button>
                 <button
+                    aria-label="Split (P key)"
                     class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
                     class:hidden=move || show_shuffle.get()
                     on:click=move |_| do_action(Action::Split)
