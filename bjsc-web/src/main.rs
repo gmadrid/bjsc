@@ -528,35 +528,35 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                         class:font-bold=move || screen.get() == Screen::Play
                         class:text-gray-300=move || screen.get() != Screen::Play
                         on:click=move |_| go_to_screen(Screen::Play)
-                    >"Play"</button>
+                    ><span class="text-amber-400 font-bold">"P"</span>"lay"</button>
                     <button
                         class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
                         class:text-cyan-400=move || screen.get() == Screen::Stats
                         class:font-bold=move || screen.get() == Screen::Stats
                         class:text-gray-300=move || screen.get() != Screen::Stats
                         on:click=move |_| go_to_screen(Screen::Stats)
-                    >"Stats"</button>
+                    ><span class="text-amber-400 font-bold">"S"</span>"tats"</button>
                     <button
                         class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
                         class:text-cyan-400=move || screen.get() == Screen::Progress
                         class:font-bold=move || screen.get() == Screen::Progress
                         class:text-gray-300=move || screen.get() != Screen::Progress
                         on:click=move |_| go_to_screen(Screen::Progress)
-                    >"Progress"</button>
+                    >"Pro"<span class="text-amber-400 font-bold">"g"</span>"ress"</button>
                     <button
                         class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
                         class:text-cyan-400=move || screen.get() == Screen::Coach
                         class:font-bold=move || screen.get() == Screen::Coach
                         class:text-gray-300=move || screen.get() != Screen::Coach
                         on:click=move |_| go_to_screen(Screen::Coach)
-                    >"Coach"</button>
+                    ><span class="text-amber-400 font-bold">"C"</span>"oach"</button>
                     <button
                         class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
                         class:text-cyan-400=move || screen.get() == Screen::Strategy
                         class:font-bold=move || screen.get() == Screen::Strategy
                         class:text-gray-300=move || screen.get() != Screen::Strategy
                         on:click=move |_| go_to_screen(Screen::Strategy)
-                    >"Strategy"</button>
+                    >"S"<span class="text-amber-400 font-bold">"t"</span>"rategy"</button>
                 </nav>
                 <div class="border-t border-gray-700 mx-2" />
                 <div class="px-2 py-2">
