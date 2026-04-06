@@ -499,246 +499,306 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 </div>
             </div>
 
-            // Histogram screen
-            <div class:hidden=move || screen.get() != 1>
-                <h2 class="font-bold text-cyan-400 text-lg mb-4">"Spaced Repetition Buckets"</h2>
-                <div class="space-y-1.5">
-                    {move || {
-                        let counts = box_counts.get();
-                        let dues = box_due.get();
-                        let max_val = counts.iter().copied().max().unwrap_or(1).max(1);
-                        let labels = bjsc::BOX_LABELS;
-                        let colors = ["#ff6b6b", "#e03131", "#ffd43b", "#fab005", "#66d9e8", "#22b8cf", "#4dabf7", "#51cf66", "#8ce99a"];
-                        let due_colors = ["#ffcccc", "#ff8888", "#fff3b0", "#ffe066", "#ccf2f7", "#99e5f0", "#b3d9ff", "#aaeeb0", "#d4f7d6"];
-
-                        counts.iter().enumerate().map(|(i, &count)| {
-                            let due = dues[i];
-                            let not_due = count - due;
-                            let not_due_pct = if max_val > 0 { (not_due as f64 / max_val as f64) * 100.0 } else { 0.0 };
-                            let due_pct = if max_val > 0 { (due as f64 / max_val as f64) * 100.0 } else { 0.0 };
-                            let color = colors[i];
-                            let due_color = due_colors[i];
-                            let label = labels[i];
-                            let count_text = if due > 0 {
-                                format!("{} ({})", count, due)
-                            } else {
-                                format!("{}", count)
-                            };
-                            view! {
-                                <div class="flex items-center gap-3">
-                                    <span class="w-22 text-right text-sm text-gray-400 shrink-0">{format!("B{} ({})", i, label)}</span>
-                                    <div class="flex-1 h-5 bg-slate-800 rounded overflow-hidden flex">
-                                        <div class="h-full rounded-l transition-all duration-300"
-                                             style:width=format!("{}%", not_due_pct)
-                                             style:background-color=color>
-                                        </div>
-                                        <div class="h-full transition-all duration-300"
-                                             style:width=format!("{}%", due_pct)
-                                             style:background-color=due_color>
-                                        </div>
-                                    </div>
-                                    <span class="w-16 text-right text-sm shrink-0">{count_text}</span>
-                                </div>
-                            }
-                        }).collect::<Vec<_>>()
-                    }}
-                </div>
-                <div class="mt-4 text-sm text-gray-500">
-                    <span class="font-bold">"Unseen: "</span>
-                    <span>{move || unseen_count.get()}</span>
-                </div>
-            </div>
-
-            // Progress screen
-            <div class:hidden=move || screen.get() != 2>
-                <h2 class="font-bold text-cyan-400 text-lg mb-4">"Progress Dashboard"</h2>
-
-                // Overall accuracy
-                <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
-                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Accuracy"</div>
-                    <div class="mb-1">
-                        <span class="font-bold text-gray-400">"Overall: "</span>
-                        <span class="font-bold">{move || format!("{:.1}%", progress_stats.get().accuracy_pct)}</span>
-                        <span class="text-gray-500">{move || format!("  ({}/{})", progress_stats.get().total_correct, progress_stats.get().total_answers)}</span>
-                    </div>
-                    <div class="flex gap-6">
-                        <span><span class="font-bold text-gray-400">"Hard: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().hard_correct, progress_stats.get().hard_total)}</span>
-                        <span><span class="font-bold text-gray-400">"Soft: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().soft_correct, progress_stats.get().soft_total)}</span>
-                        <span><span class="font-bold text-gray-400">"Split: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().split_correct, progress_stats.get().split_total)}</span>
-                        <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().double_correct, progress_stats.get().double_total)}</span>
-                    </div>
-                </div>
-
-                // Trouble spots
-                <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
-                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Trouble Spots"</div>
-                    {move || {
-                        let stats = progress_stats.get();
-                        if stats.trouble_spots.is_empty() {
-                            view! { <div class="text-gray-500 text-sm">"No mistakes recorded yet."</div> }.into_any()
-                        } else {
-                            view! {
-                                <div>
-                                    {stats.trouble_spots.iter().map(|(idx, wrong, seen)| {
-                                        let pct = *wrong as f64 / *seen as f64 * 100.0;
-                                        view! {
-                                            <div class="flex justify-between py-0.5 text-sm border-b border-gray-800">
-                                                <span class="text-red-400">{idx.clone()}</span>
-                                                <span>{format!("{}/{} wrong ({:.0}%)", wrong, seen, pct)}</span>
-                                            </div>
-                                        }
-                                    }).collect::<Vec<_>>()}
-                                </div>
-                            }.into_any()
-                        }
-                    }}
-                </div>
-
-                // Recent sessions
-                <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
-                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Recent Sessions"</div>
-                    {move || {
-                        let stats = progress_stats.get();
-                        if stats.sessions.is_empty() {
-                            view! { <div class="text-gray-500 text-sm">"No sessions recorded yet."</div> }.into_any()
-                        } else {
-                            view! {
-                                <div>
-                                    {stats.sessions.iter().map(|(day, total, correct)| {
-                                        let pct = if *total > 0 { *correct as f64 / *total as f64 * 100.0 } else { 0.0 };
-                                        let color_class = if pct >= 80.0 { "text-green-400" } else if pct >= 60.0 { "text-yellow-400" } else { "text-red-400" };
-                                        view! {
-                                            <div class="flex justify-between py-0.5 text-sm border-b border-gray-800">
-                                                <span class="text-cyan-400">{day.clone()}</span>
-                                                <span>{format!("{} answered", total)}</span>
-                                                <span class=color_class>{format!("{:.0}%", pct)}</span>
-                                            </div>
-                                        }
-                                    }).collect::<Vec<_>>()}
-                                </div>
-                            }.into_any()
-                        }
-                    }}
-                </div>
-            </div>
-
-            // Coach screen
-            <div class:hidden=move || screen.get() != 3>
-                <h2 class="font-bold text-cyan-400 text-lg mb-4">"Coach (powered by Claude)"</h2>
-                <div
-                    class="border border-gray-700 rounded-md px-4 py-4 text-sm leading-relaxed prose prose-invert prose-sm max-w-none"
-                    inner_html=move || {
-                        let md = coaching_text.get();
-                        let parser = pulldown_cmark::Parser::new(&md);
-                        let mut html = String::new();
-                        pulldown_cmark::html::push_html(&mut html, parser);
-                        html
-                    }
-                />
-            </div>
-
-            // Play screen
-            <div class:hidden=move || screen.get() != 0>
-                // Stats panel
-                <div class="border border-gray-700 rounded-md px-4 py-3 mb-6">
-                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Stats"</div>
-                    <div>
-                        <span class="font-bold text-gray-400">"Hands: "</span>
-                        <span>{move || score_text.get()}</span>
-                    </div>
-                    <div class="flex gap-6 mt-1">
-                        <span><span class="font-bold text-gray-400">"Hard: "</span>{move || hard_stat.get()}</span>
-                        <span><span class="font-bold text-gray-400">"Soft: "</span>{move || soft_stat.get()}</span>
-                        <span><span class="font-bold text-gray-400">"Split: "</span>{move || split_stat.get()}</span>
-                        <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || double_stat.get()}</span>
-                    </div>
-                    <div class="flex gap-6 mt-1">
-                        <span><span class="font-bold text-gray-500">"New: "</span><span class="text-gray-500">{move || new_count.get()}</span></span>
-                        <span><span class="font-bold text-gray-400">"Weak: "</span><span class="text-red-400">{move || weak_count.get()}</span></span>
-                        <span><span class="font-bold text-gray-400">"Mastered: "</span><span class="text-green-400">{move || mastered_count.get()}</span></span>
-                        <span><span class="font-bold text-gray-400">"Due: "</span><span class="text-yellow-400">{move || due_count.get()}</span></span>
-                    </div>
-                </div>
-
-                // Hands
-                <div class="mb-6">
-                    <div class="text-xl py-1">
-                        <span class="font-bold text-cyan-400">"Dealer: "</span>
-                        <span class="text-2xl tracking-wide">{move || dealer_text.get()}</span>
-                    </div>
-                    <div class="text-xl py-1">
-                        <span class="font-bold text-cyan-400">"Player: "</span>
-                        <span class="text-2xl tracking-wide">{move || player_text.get()}</span>
-                    </div>
-                </div>
-
-                // Status message
-                <div
-                    class="text-center px-4 py-2 rounded font-bold text-lg mb-6"
-                    class:hidden=move || !status_visible.get()
-                    class:bg-green-900=move || !status_is_error.get()
-                    class:text-green-300=move || !status_is_error.get()
-                    class:bg-red-900=move || status_is_error.get()
-                    class:text-red-200=move || status_is_error.get()
-                >
-                    {move || status_text.get()}
-                </div>
-
-                // Action buttons
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 justify-center mb-6">
-                    <button
-                        class="col-span-2 sm:col-span-4 px-5 py-2.5 border border-green-700 rounded-md bg-green-950 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-green-900 hover:border-green-500"
-                        class:hidden=move || !show_shuffle.get()
-                        on:click=move |_| do_shuffle()
-                    >
-                        "Shuffle New Shoe"
-                    </button>
-                    <button
-                        class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
-                        class:hidden=move || show_shuffle.get()
-                        on:click=move |_| do_action(Action::Hit)
-                    >"(H)it"</button>
-                    <button
-                        class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
-                        class:hidden=move || show_shuffle.get()
-                        on:click=move |_| do_action(Action::Stand)
-                    >"(S)tand"</button>
-                    <button
-                        class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
-                        class:hidden=move || show_shuffle.get()
-                        on:click=move |_| do_action(Action::Double)
-                    >"(D)ouble"</button>
-                    <button
-                        class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
-                        class:hidden=move || show_shuffle.get()
-                        on:click=move |_| do_action(Action::Split)
-                    >"S(p)lit"</button>
-                </div>
-
-                // Error log
-                <div class="border border-gray-700 rounded-md px-4 py-3 mb-6 max-h-72 overflow-y-auto">
-                    <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Mistakes"</div>
-                    {move || {
-                        errors
-                            .get()
-                            .into_iter()
-                            .map(|e| {
-                                view! {
-                                    <div class="py-1 border-b border-gray-800 text-sm">
-                                        <span class="font-bold text-red-400">"Error: "</span>
-                                        {e}
-                                    </div>
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                    }}
-                </div>
-            </div>
+            <HistogramScreen screen=screen box_counts=box_counts box_due=box_due unseen_count=unseen_count />
+            <ProgressScreen screen=screen progress_stats=progress_stats />
+            <CoachScreen screen=screen coaching_text=coaching_text />
+            <PlayScreen
+                screen=screen
+                score_text=score_text hard_stat=hard_stat soft_stat=soft_stat split_stat=split_stat double_stat=double_stat
+                new_count=new_count weak_count=weak_count mastered_count=mastered_count due_count=due_count
+                dealer_text=dealer_text player_text=player_text
+                status_text=status_text status_is_error=status_is_error status_visible=status_visible
+                show_shuffle=show_shuffle errors=errors
+                do_action=do_action do_shuffle=do_shuffle
+            />
 
             // Keyboard hint
             <div class="flex justify-between text-xs py-4">
                 <span class="text-gray-400">"Keyboard: h / s / d / p"</span>
                 <span class="text-gray-600">{env!("BUILD_TIME")}</span>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn HistogramScreen(
+    screen: RwSignal<u8>,
+    box_counts: RwSignal<[u32; NUM_BOXES as usize]>,
+    box_due: RwSignal<[u32; NUM_BOXES as usize]>,
+    unseen_count: RwSignal<u32>,
+) -> impl IntoView {
+    view! {
+        <div class:hidden=move || screen.get() != 1>
+            <h2 class="font-bold text-cyan-400 text-lg mb-4">"Spaced Repetition Buckets"</h2>
+            <div class="space-y-1.5">
+                {move || {
+                    let counts = box_counts.get();
+                    let dues = box_due.get();
+                    let max_val = counts.iter().copied().max().unwrap_or(1).max(1);
+                    let labels = bjsc::BOX_LABELS;
+                    let colors = ["#ff6b6b", "#e03131", "#ffd43b", "#fab005", "#66d9e8", "#22b8cf", "#4dabf7", "#51cf66", "#8ce99a"];
+                    let due_colors = ["#ffcccc", "#ff8888", "#fff3b0", "#ffe066", "#ccf2f7", "#99e5f0", "#b3d9ff", "#aaeeb0", "#d4f7d6"];
+
+                    counts.iter().enumerate().map(|(i, &count)| {
+                        let due = dues[i];
+                        let not_due = count - due;
+                        let not_due_pct = if max_val > 0 { (not_due as f64 / max_val as f64) * 100.0 } else { 0.0 };
+                        let due_pct = if max_val > 0 { (due as f64 / max_val as f64) * 100.0 } else { 0.0 };
+                        let color = colors[i];
+                        let due_color = due_colors[i];
+                        let label = labels[i];
+                        let count_text = if due > 0 {
+                            format!("{} ({})", count, due)
+                        } else {
+                            format!("{}", count)
+                        };
+                        view! {
+                            <div class="flex items-center gap-3">
+                                <span class="w-22 text-right text-sm text-gray-400 shrink-0">{format!("B{} ({})", i, label)}</span>
+                                <div class="flex-1 h-5 bg-slate-800 rounded overflow-hidden flex">
+                                    <div class="h-full rounded-l transition-all duration-300"
+                                         style:width=format!("{}%", not_due_pct)
+                                         style:background-color=color>
+                                    </div>
+                                    <div class="h-full transition-all duration-300"
+                                         style:width=format!("{}%", due_pct)
+                                         style:background-color=due_color>
+                                    </div>
+                                </div>
+                                <span class="w-16 text-right text-sm shrink-0">{count_text}</span>
+                            </div>
+                        }
+                    }).collect::<Vec<_>>()
+                }}
+            </div>
+            <div class="mt-4 text-sm text-gray-500">
+                <span class="font-bold">"Unseen: "</span>
+                <span>{move || unseen_count.get()}</span>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn ProgressScreen(
+    screen: RwSignal<u8>,
+    progress_stats: RwSignal<bjsc::progress::ProgressStats>,
+) -> impl IntoView {
+    view! {
+        <div class:hidden=move || screen.get() != 2>
+            <h2 class="font-bold text-cyan-400 text-lg mb-4">"Progress Dashboard"</h2>
+
+            // Overall accuracy
+            <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
+                <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Accuracy"</div>
+                <div class="mb-1">
+                    <span class="font-bold text-gray-400">"Overall: "</span>
+                    <span class="font-bold">{move || format!("{:.1}%", progress_stats.get().accuracy_pct)}</span>
+                    <span class="text-gray-500">{move || format!("  ({}/{})", progress_stats.get().total_correct, progress_stats.get().total_answers)}</span>
+                </div>
+                <div class="flex gap-6">
+                    <span><span class="font-bold text-gray-400">"Hard: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().hard_correct, progress_stats.get().hard_total)}</span>
+                    <span><span class="font-bold text-gray-400">"Soft: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().soft_correct, progress_stats.get().soft_total)}</span>
+                    <span><span class="font-bold text-gray-400">"Split: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().split_correct, progress_stats.get().split_total)}</span>
+                    <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || bjsc::progress::ProgressStats::category_pct(progress_stats.get().double_correct, progress_stats.get().double_total)}</span>
+                </div>
+            </div>
+
+            // Trouble spots
+            <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
+                <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Trouble Spots"</div>
+                {move || {
+                    let stats = progress_stats.get();
+                    if stats.trouble_spots.is_empty() {
+                        view! { <div class="text-gray-500 text-sm">"No mistakes recorded yet."</div> }.into_any()
+                    } else {
+                        view! {
+                            <div>
+                                {stats.trouble_spots.iter().map(|(idx, wrong, seen)| {
+                                    let pct = *wrong as f64 / *seen as f64 * 100.0;
+                                    view! {
+                                        <div class="flex justify-between py-0.5 text-sm border-b border-gray-800">
+                                            <span class="text-red-400">{idx.clone()}</span>
+                                            <span>{format!("{}/{} wrong ({:.0}%)", wrong, seen, pct)}</span>
+                                        </div>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        }.into_any()
+                    }
+                }}
+            </div>
+
+            // Recent sessions
+            <div class="border border-gray-700 rounded-md px-4 py-3 mb-4">
+                <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Recent Sessions"</div>
+                {move || {
+                    let stats = progress_stats.get();
+                    if stats.sessions.is_empty() {
+                        view! { <div class="text-gray-500 text-sm">"No sessions recorded yet."</div> }.into_any()
+                    } else {
+                        view! {
+                            <div>
+                                {stats.sessions.iter().map(|(day, total, correct)| {
+                                    let pct = if *total > 0 { *correct as f64 / *total as f64 * 100.0 } else { 0.0 };
+                                    let color_class = if pct >= 80.0 { "text-green-400" } else if pct >= 60.0 { "text-yellow-400" } else { "text-red-400" };
+                                    view! {
+                                        <div class="flex justify-between py-0.5 text-sm border-b border-gray-800">
+                                            <span class="text-cyan-400">{day.clone()}</span>
+                                            <span>{format!("{} answered", total)}</span>
+                                            <span class=color_class>{format!("{:.0}%", pct)}</span>
+                                        </div>
+                                    }
+                                }).collect::<Vec<_>>()}
+                            </div>
+                        }.into_any()
+                    }
+                }}
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn CoachScreen(
+    screen: RwSignal<u8>,
+    coaching_text: RwSignal<String>,
+) -> impl IntoView {
+    view! {
+        <div class:hidden=move || screen.get() != 3>
+            <h2 class="font-bold text-cyan-400 text-lg mb-4">"Coach (powered by Claude)"</h2>
+            <div
+                class="border border-gray-700 rounded-md px-4 py-4 text-sm leading-relaxed prose prose-invert prose-sm max-w-none"
+                inner_html=move || {
+                    let md = coaching_text.get();
+                    let parser = pulldown_cmark::Parser::new(&md);
+                    let mut html = String::new();
+                    pulldown_cmark::html::push_html(&mut html, parser);
+                    html
+                }
+            />
+        </div>
+    }
+}
+
+#[component]
+fn PlayScreen(
+    screen: RwSignal<u8>,
+    score_text: RwSignal<String>,
+    hard_stat: RwSignal<String>,
+    soft_stat: RwSignal<String>,
+    split_stat: RwSignal<String>,
+    double_stat: RwSignal<String>,
+    new_count: RwSignal<u32>,
+    weak_count: RwSignal<u32>,
+    mastered_count: RwSignal<u32>,
+    due_count: RwSignal<u32>,
+    dealer_text: RwSignal<String>,
+    player_text: RwSignal<String>,
+    status_text: RwSignal<String>,
+    status_is_error: RwSignal<bool>,
+    status_visible: RwSignal<bool>,
+    show_shuffle: RwSignal<bool>,
+    errors: RwSignal<Vec<String>>,
+    do_action: impl Fn(Action) + Copy + 'static,
+    do_shuffle: impl Fn() + Copy + 'static,
+) -> impl IntoView {
+    view! {
+        <div class:hidden=move || screen.get() != 0>
+            // Stats panel
+            <div class="border border-gray-700 rounded-md px-4 py-3 mb-6">
+                <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Stats"</div>
+                <div>
+                    <span class="font-bold text-gray-400">"Hands: "</span>
+                    <span>{move || score_text.get()}</span>
+                </div>
+                <div class="flex gap-6 mt-1">
+                    <span><span class="font-bold text-gray-400">"Hard: "</span>{move || hard_stat.get()}</span>
+                    <span><span class="font-bold text-gray-400">"Soft: "</span>{move || soft_stat.get()}</span>
+                    <span><span class="font-bold text-gray-400">"Split: "</span>{move || split_stat.get()}</span>
+                    <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || double_stat.get()}</span>
+                </div>
+                <div class="flex gap-6 mt-1">
+                    <span><span class="font-bold text-gray-500">"New: "</span><span class="text-gray-500">{move || new_count.get()}</span></span>
+                    <span><span class="font-bold text-gray-400">"Weak: "</span><span class="text-red-400">{move || weak_count.get()}</span></span>
+                    <span><span class="font-bold text-gray-400">"Mastered: "</span><span class="text-green-400">{move || mastered_count.get()}</span></span>
+                    <span><span class="font-bold text-gray-400">"Due: "</span><span class="text-yellow-400">{move || due_count.get()}</span></span>
+                </div>
+            </div>
+
+            // Hands
+            <div class="mb-6">
+                <div class="text-xl py-1">
+                    <span class="font-bold text-cyan-400">"Dealer: "</span>
+                    <span class="text-2xl tracking-wide">{move || dealer_text.get()}</span>
+                </div>
+                <div class="text-xl py-1">
+                    <span class="font-bold text-cyan-400">"Player: "</span>
+                    <span class="text-2xl tracking-wide">{move || player_text.get()}</span>
+                </div>
+            </div>
+
+            // Status message
+            <div
+                class="text-center px-4 py-2 rounded font-bold text-lg mb-6"
+                class:hidden=move || !status_visible.get()
+                class:bg-green-900=move || !status_is_error.get()
+                class:text-green-300=move || !status_is_error.get()
+                class:bg-red-900=move || status_is_error.get()
+                class:text-red-200=move || status_is_error.get()
+            >
+                {move || status_text.get()}
+            </div>
+
+            // Action buttons
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 justify-center mb-6">
+                <button
+                    class="col-span-2 sm:col-span-4 px-5 py-2.5 border border-green-700 rounded-md bg-green-950 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-green-900 hover:border-green-500"
+                    class:hidden=move || !show_shuffle.get()
+                    on:click=move |_| do_shuffle()
+                >
+                    "Shuffle New Shoe"
+                </button>
+                <button
+                    class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
+                    class:hidden=move || show_shuffle.get()
+                    on:click=move |_| do_action(Action::Hit)
+                >"(H)it"</button>
+                <button
+                    class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
+                    class:hidden=move || show_shuffle.get()
+                    on:click=move |_| do_action(Action::Stand)
+                >"(S)tand"</button>
+                <button
+                    class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
+                    class:hidden=move || show_shuffle.get()
+                    on:click=move |_| do_action(Action::Double)
+                >"(D)ouble"</button>
+                <button
+                    class="px-5 py-2.5 border border-gray-600 rounded-md bg-slate-800 text-gray-200 text-base font-mono cursor-pointer transition-colors hover:bg-slate-700 hover:border-cyan-400 active:bg-slate-600"
+                    class:hidden=move || show_shuffle.get()
+                    on:click=move |_| do_action(Action::Split)
+                >"S(p)lit"</button>
+            </div>
+
+            // Error log
+            <div class="border border-gray-700 rounded-md px-4 py-3 mb-6 max-h-72 overflow-y-auto">
+                <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Mistakes"</div>
+                {move || {
+                    errors
+                        .get()
+                        .into_iter()
+                        .map(|e| {
+                            view! {
+                                <div class="py-1 border-b border-gray-800 text-sm">
+                                    <span class="font-bold text-red-400">"Error: "</span>
+                                    {e}
+                                </div>
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                }}
             </div>
         </div>
     }
