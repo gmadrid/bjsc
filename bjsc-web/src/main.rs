@@ -212,8 +212,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     };
 
     // Load deck from Supabase on mount, refreshing token if needed
-    {
-        let auth = auth_state.get_untracked().unwrap();
+    if let Some(auth) = auth_state.get_untracked() {
         let config = supabase_config();
         leptos::task::spawn_local(async move {
             let mut token = auth.access_token.clone();
@@ -236,16 +235,32 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 result
             };
 
-            if let Ok(Some(row)) = result {
-                GAME.with_borrow_mut(|gs| {
-                    gs.set_deck(row.deck);
-                    gs.set_study_mode(row.study_mode);
-                    gs.deal_a_hand();
-                });
+            match result {
+                Ok(Some(row)) => {
+                    GAME.with_borrow_mut(|gs| {
+                        gs.set_deck(row.deck);
+                        gs.set_study_mode(row.study_mode);
+                        gs.deal_a_hand();
+                    });
+                }
+                Ok(None) => {
+                    // No saved deck — start fresh
+                    GAME.with_borrow_mut(|gs| gs.deal_a_hand());
+                }
+                Err(e) => {
+                    web_sys::console::warn_1(
+                        &format!("Failed to load deck from cloud: {}", e).into(),
+                    );
+                    GAME.with_borrow_mut(|gs| gs.deal_a_hand());
+                }
             }
             loading.set(false);
             sync_all();
         });
+    } else {
+        web_sys::console::warn_1(&"Auth state missing on mount, using local data.".into());
+        loading.set(false);
+        sync_all();
     }
 
     let do_action = move |action: Action| {
@@ -346,7 +361,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         menu_open.set(false);
     };
 
-    // Global keyboard listener
+    // Global keyboard listener (with cleanup to prevent leaks on unmount)
     let closure =
         Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
             let tag = e
@@ -372,11 +387,19 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 }
             }
         });
-    let _ = web_sys::window()
-        .unwrap()
-        .document()
-        .unwrap()
-        .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+    // Clone the JS function reference for cleanup, then register the listener.
+    // closure.forget() intentionally leaks the closure to keep the callback valid.
+    // on_cleanup removes the listener from the DOM to prevent duplicate handlers.
+    let js_ref = closure.as_ref().clone();
+    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+        let _ = doc.add_event_listener_with_callback("keydown", js_ref.unchecked_ref());
+        on_cleanup(move || {
+            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                let _ =
+                    doc.remove_event_listener_with_callback("keydown", js_ref.unchecked_ref());
+            }
+        });
+    }
     closure.forget();
 
     view! {
