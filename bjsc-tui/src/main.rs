@@ -290,8 +290,7 @@ impl App {
                 )
                 .await;
                 if let Err(e) = result {
-                    if let Some(new_auth) = auth::refresh_tokens_async(&config, &auth_clone).await
-                    {
+                    if let Some(new_auth) = auth::refresh_tokens_async(&config, &auth_clone).await {
                         if let Err(e) = api::upsert_user_deck(
                             &config,
                             &new_auth.access_token,
@@ -327,9 +326,7 @@ impl App {
 
                 // If failed, try refreshing token and retry
                 let result = if result.is_err() {
-                    if let Some(new_auth) =
-                        auth::refresh_tokens_async(&config, &auth_clone).await
-                    {
+                    if let Some(new_auth) = auth::refresh_tokens_async(&config, &auth_clone).await {
                         api::get_coaching(&config, &new_auth.access_token).await
                     } else {
                         result

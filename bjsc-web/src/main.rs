@@ -26,6 +26,7 @@ fn main() {
     leptos::mount::mount_to_body(App);
 }
 
+#[derive(Clone, Default)]
 struct DisplayData {
     dealer: String,
     player: String,
@@ -64,26 +65,6 @@ fn read_display() -> DisplayData {
             due_count: ds.due,
         }
     })
-}
-
-#[allow(clippy::too_many_arguments)]
-fn push_display(
-    data: &DisplayData,
-    dealer: RwSignal<String>,
-    player: RwSignal<String>,
-    score: RwSignal<String>,
-    hard_stat: RwSignal<String>,
-    soft_stat: RwSignal<String>,
-    split_stat: RwSignal<String>,
-    double_stat: RwSignal<String>,
-) {
-    dealer.set(data.dealer.clone());
-    player.set(data.player.clone());
-    score.set(data.score.clone());
-    hard_stat.set(data.hard.clone());
-    soft_stat.set(data.soft.clone());
-    split_stat.set(data.split.clone());
-    double_stat.set(data.double.clone());
 }
 
 /// Log an answer to Supabase (fire-and-forget).
@@ -164,13 +145,7 @@ fn LoginView() -> impl IntoView {
 
 #[component]
 fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
-    let dealer_text = RwSignal::new(String::new());
-    let player_text = RwSignal::new(String::new());
-    let score_text = RwSignal::new(String::new());
-    let hard_stat = RwSignal::new(String::new());
-    let soft_stat = RwSignal::new(String::new());
-    let split_stat = RwSignal::new(String::new());
-    let double_stat = RwSignal::new(String::new());
+    let game_display = RwSignal::new(DisplayData::default());
     let status_text = RwSignal::new(String::new());
     let status_is_error = RwSignal::new(false);
     let status_visible = RwSignal::new(false);
@@ -179,36 +154,12 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     // Screen: 0=play, 1=histogram, 2=progress, 3=coach
     let screen = RwSignal::new(0u8);
     let coaching_text = RwSignal::new(String::new());
-    let box_counts: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
-    let box_due: RwSignal<[u32; NUM_BOXES as usize]> = RwSignal::new([0; NUM_BOXES as usize]);
-    let unseen_count = RwSignal::new(0u32);
-    let new_count = RwSignal::new(0u32);
-    let weak_count = RwSignal::new(0u32);
-    let mastered_count = RwSignal::new(0u32);
-    let due_count = RwSignal::new(0u32);
     let progress_stats: RwSignal<bjsc::progress::ProgressStats> =
         RwSignal::new(bjsc::progress::ProgressStats::default());
     let loading = RwSignal::new(true);
 
     let sync_all = move || {
-        let data = read_display();
-        push_display(
-            &data,
-            dealer_text,
-            player_text,
-            score_text,
-            hard_stat,
-            soft_stat,
-            split_stat,
-            double_stat,
-        );
-        box_counts.set(data.box_counts);
-        box_due.set(data.box_due);
-        unseen_count.set(data.unseen);
-        new_count.set(data.new_count);
-        weak_count.set(data.weak_count);
-        mastered_count.set(data.mastered_count);
-        due_count.set(data.due_count);
+        game_display.set(read_display());
     };
 
     // Load deck from Supabase on mount, refreshing token if needed
@@ -395,8 +346,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
         let _ = doc.add_event_listener_with_callback("keydown", js_ref.unchecked_ref());
         on_cleanup(move || {
             if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-                let _ =
-                    doc.remove_event_listener_with_callback("keydown", js_ref.unchecked_ref());
+                let _ = doc.remove_event_listener_with_callback("keydown", js_ref.unchecked_ref());
             }
         });
     }
@@ -499,14 +449,11 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 </div>
             </div>
 
-            <HistogramScreen screen=screen box_counts=box_counts box_due=box_due unseen_count=unseen_count />
+            <HistogramScreen screen=screen game_data=game_display />
             <ProgressScreen screen=screen progress_stats=progress_stats />
             <CoachScreen screen=screen coaching_text=coaching_text />
             <PlayScreen
-                screen=screen
-                score_text=score_text hard_stat=hard_stat soft_stat=soft_stat split_stat=split_stat double_stat=double_stat
-                new_count=new_count weak_count=weak_count mastered_count=mastered_count due_count=due_count
-                dealer_text=dealer_text player_text=player_text
+                screen=screen game_data=game_display
                 status_text=status_text status_is_error=status_is_error status_visible=status_visible
                 show_shuffle=show_shuffle errors=errors
                 do_action=do_action do_shuffle=do_shuffle
@@ -522,19 +469,15 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
 }
 
 #[component]
-fn HistogramScreen(
-    screen: RwSignal<u8>,
-    box_counts: RwSignal<[u32; NUM_BOXES as usize]>,
-    box_due: RwSignal<[u32; NUM_BOXES as usize]>,
-    unseen_count: RwSignal<u32>,
-) -> impl IntoView {
+fn HistogramScreen(screen: RwSignal<u8>, game_data: RwSignal<DisplayData>) -> impl IntoView {
     view! {
         <div class:hidden=move || screen.get() != 1>
             <h2 class="font-bold text-cyan-400 text-lg mb-4">"Spaced Repetition Buckets"</h2>
             <div class="space-y-1.5">
                 {move || {
-                    let counts = box_counts.get();
-                    let dues = box_due.get();
+                    let d = game_data.get();
+                    let counts = d.box_counts;
+                    let dues = d.box_due;
                     let max_val = counts.iter().copied().max().unwrap_or(1).max(1);
                     let labels = bjsc::BOX_LABELS;
                     let colors = ["#ff6b6b", "#e03131", "#ffd43b", "#fab005", "#66d9e8", "#22b8cf", "#4dabf7", "#51cf66", "#8ce99a"];
@@ -574,7 +517,7 @@ fn HistogramScreen(
             </div>
             <div class="mt-4 text-sm text-gray-500">
                 <span class="font-bold">"Unseen: "</span>
-                <span>{move || unseen_count.get()}</span>
+                <span>{move || game_data.get().unseen}</span>
             </div>
         </div>
     }
@@ -661,10 +604,7 @@ fn ProgressScreen(
 }
 
 #[component]
-fn CoachScreen(
-    screen: RwSignal<u8>,
-    coaching_text: RwSignal<String>,
-) -> impl IntoView {
+fn CoachScreen(screen: RwSignal<u8>, coaching_text: RwSignal<String>) -> impl IntoView {
     view! {
         <div class:hidden=move || screen.get() != 3>
             <h2 class="font-bold text-cyan-400 text-lg mb-4">"Coach (powered by Claude)"</h2>
@@ -685,17 +625,7 @@ fn CoachScreen(
 #[component]
 fn PlayScreen(
     screen: RwSignal<u8>,
-    score_text: RwSignal<String>,
-    hard_stat: RwSignal<String>,
-    soft_stat: RwSignal<String>,
-    split_stat: RwSignal<String>,
-    double_stat: RwSignal<String>,
-    new_count: RwSignal<u32>,
-    weak_count: RwSignal<u32>,
-    mastered_count: RwSignal<u32>,
-    due_count: RwSignal<u32>,
-    dealer_text: RwSignal<String>,
-    player_text: RwSignal<String>,
+    game_data: RwSignal<DisplayData>,
     status_text: RwSignal<String>,
     status_is_error: RwSignal<bool>,
     status_visible: RwSignal<bool>,
@@ -711,19 +641,19 @@ fn PlayScreen(
                 <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Stats"</div>
                 <div>
                     <span class="font-bold text-gray-400">"Hands: "</span>
-                    <span>{move || score_text.get()}</span>
+                    <span>{move || game_data.get().score.clone()}</span>
                 </div>
                 <div class="flex gap-6 mt-1">
-                    <span><span class="font-bold text-gray-400">"Hard: "</span>{move || hard_stat.get()}</span>
-                    <span><span class="font-bold text-gray-400">"Soft: "</span>{move || soft_stat.get()}</span>
-                    <span><span class="font-bold text-gray-400">"Split: "</span>{move || split_stat.get()}</span>
-                    <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || double_stat.get()}</span>
+                    <span><span class="font-bold text-gray-400">"Hard: "</span>{move || game_data.get().hard.clone()}</span>
+                    <span><span class="font-bold text-gray-400">"Soft: "</span>{move || game_data.get().soft.clone()}</span>
+                    <span><span class="font-bold text-gray-400">"Split: "</span>{move || game_data.get().split.clone()}</span>
+                    <span><span class="font-bold text-gray-400">"Dbl: "</span>{move || game_data.get().double.clone()}</span>
                 </div>
                 <div class="flex gap-6 mt-1">
-                    <span><span class="font-bold text-gray-500">"New: "</span><span class="text-gray-500">{move || new_count.get()}</span></span>
-                    <span><span class="font-bold text-gray-400">"Weak: "</span><span class="text-red-400">{move || weak_count.get()}</span></span>
-                    <span><span class="font-bold text-gray-400">"Mastered: "</span><span class="text-green-400">{move || mastered_count.get()}</span></span>
-                    <span><span class="font-bold text-gray-400">"Due: "</span><span class="text-yellow-400">{move || due_count.get()}</span></span>
+                    <span><span class="font-bold text-gray-500">"New: "</span><span class="text-gray-500">{move || game_data.get().new_count}</span></span>
+                    <span><span class="font-bold text-gray-400">"Weak: "</span><span class="text-red-400">{move || game_data.get().weak_count}</span></span>
+                    <span><span class="font-bold text-gray-400">"Mastered: "</span><span class="text-green-400">{move || game_data.get().mastered_count}</span></span>
+                    <span><span class="font-bold text-gray-400">"Due: "</span><span class="text-yellow-400">{move || game_data.get().due_count}</span></span>
                 </div>
             </div>
 
@@ -731,11 +661,11 @@ fn PlayScreen(
             <div class="mb-6">
                 <div class="text-xl py-1">
                     <span class="font-bold text-cyan-400">"Dealer: "</span>
-                    <span class="text-2xl tracking-wide">{move || dealer_text.get()}</span>
+                    <span class="text-2xl tracking-wide">{move || game_data.get().dealer.clone()}</span>
                 </div>
                 <div class="text-xl py-1">
                     <span class="font-bold text-cyan-400">"Player: "</span>
-                    <span class="text-2xl tracking-wide">{move || player_text.get()}</span>
+                    <span class="text-2xl tracking-wide">{move || game_data.get().player.clone()}</span>
                 </div>
             </div>
 
