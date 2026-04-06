@@ -272,24 +272,26 @@ impl App {
             let mode = self.game_state.study_mode();
             let deck = self.game_state.deck().clone();
 
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                let result = rt.block_on(api::upsert_user_deck(
+            self.rt.spawn(async move {
+                let result = api::upsert_user_deck(
                     &config,
                     &auth_clone.access_token,
                     &auth_clone.user_id,
                     mode,
                     &deck,
-                ));
+                )
+                .await;
                 if result.is_err() {
-                    if let Some(new_auth) = auth::refresh_tokens(&config, &auth_clone, &rt) {
-                        let _ = rt.block_on(api::upsert_user_deck(
+                    if let Some(new_auth) = auth::refresh_tokens_async(&config, &auth_clone).await
+                    {
+                        let _ = api::upsert_user_deck(
                             &config,
                             &new_auth.access_token,
                             &new_auth.user_id,
                             mode,
                             &deck,
-                        ));
+                        )
+                        .await;
                     }
                 }
             });
@@ -307,14 +309,15 @@ impl App {
             let config = supabase_config();
             let auth_clone = auth.clone();
 
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                let result = rt.block_on(api::get_coaching(&config, &auth_clone.access_token));
+            self.rt.spawn(async move {
+                let result = api::get_coaching(&config, &auth_clone.access_token).await;
 
                 // If failed, try refreshing token and retry
                 let result = if result.is_err() {
-                    if let Some(new_auth) = auth::refresh_tokens(&config, &auth_clone, &rt) {
-                        rt.block_on(api::get_coaching(&config, &new_auth.access_token))
+                    if let Some(new_auth) =
+                        auth::refresh_tokens_async(&config, &auth_clone).await
+                    {
+                        api::get_coaching(&config, &new_auth.access_token).await
                     } else {
                         result
                     }
@@ -371,9 +374,8 @@ impl App {
                 player_action: player_action.to_string(),
                 correct_action: correct_action.to_string(),
             };
-            std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                let _ = rt.block_on(api::insert_answer_log(&config, &token, &row));
+            self.rt.spawn(async move {
+                let _ = api::insert_answer_log(&config, &token, &row).await;
             });
         }
     }
