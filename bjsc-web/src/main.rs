@@ -86,7 +86,8 @@ fn log_answer_to_cloud(
     };
 
     leptos::task::spawn_local(async move {
-        if let Err(e) = api::insert_answer_log(&config, &token, &row).await {
+        if let Err(e) = bjsc::api::insert_answer_log(&api::GlooClient, &config, &token, &row).await
+        {
             web_sys::console::warn_1(&format!("Log sync failed: {}", e).into());
         }
     });
@@ -100,7 +101,10 @@ fn save_to_cloud(auth: &AuthState) {
     let (mode, deck) = GAME.with_borrow(|gs| (gs.study_mode(), gs.deck().clone()));
 
     leptos::task::spawn_local(async move {
-        if let Err(e) = api::upsert_user_deck(&config, &token, &user_id, mode, &deck).await {
+        if let Err(e) =
+            bjsc::api::upsert_user_deck(&api::GlooClient, &config, &token, &user_id, mode, &deck)
+                .await
+        {
             web_sys::console::warn_1(&format!("Cloud save failed: {}", e).into());
         }
     });
@@ -169,12 +173,14 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             let mut token = auth.access_token.clone();
 
             // Try to fetch; if it fails, attempt token refresh
-            let result = api::fetch_user_deck(&config, &token).await;
+            let result = bjsc::api::fetch_user_deck(&api::GlooClient, &config, &token).await;
             let result = if result.is_err() {
-                if let Some(new_auth) = auth::refresh_session(&config, &auth).await {
+                if let Some(new_auth) =
+                    bjsc::api::refresh_session(&api::GlooClient, &config, &auth).await
+                {
                     token = new_auth.access_token.clone();
                     auth_state.set(Some(new_auth));
-                    api::fetch_user_deck(&config, &token).await
+                    bjsc::api::fetch_user_deck(&api::GlooClient, &config, &token).await
                 } else {
                     // Refresh failed — clear auth and force re-login
                     auth::clear_storage();
@@ -289,7 +295,9 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 let config = supabase_config();
                 let token = auth.access_token.clone();
                 leptos::task::spawn_local(async move {
-                    if let Ok(logs) = api::fetch_answer_logs(&config, &token, 1000).await {
+                    if let Ok(logs) =
+                        bjsc::api::fetch_answer_logs(&api::GlooClient, &config, &token, 1000).await
+                    {
                         progress_stats.set(bjsc::progress::ProgressStats::from_logs(&logs));
                     }
                 });
@@ -301,7 +309,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 let config = supabase_config();
                 let token = auth.access_token.clone();
                 leptos::task::spawn_local(async move {
-                    match api::get_coaching(&config, &token).await {
+                    match bjsc::api::get_coaching(&api::GlooClient, &config, &token).await {
                         Ok(text) => coaching_text.set(text),
                         Err(e) => coaching_text.set(format!("Error: {}", e)),
                     }

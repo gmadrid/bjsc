@@ -1,3 +1,4 @@
+pub mod api;
 mod bjerror;
 pub mod card;
 mod gamestate;

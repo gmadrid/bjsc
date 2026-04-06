@@ -1,141 +1,33 @@
-use bjsc::supabase::{
-    coaching_request, fetch_answer_logs_request, fetch_deck_request, insert_answer_log_request,
-    upsert_deck_request, AnswerLogEntry, AnswerLogRow, SupabaseConfig, UserDeckRow,
-};
-use bjsc::StudyMode;
-use spaced_rep::Deck;
+use bjsc::api::{HttpClient, HttpResponse};
 use std::sync::LazyLock;
 
 pub(crate) static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
-/// Fetch the user's deck from Supabase.
-pub async fn fetch_user_deck(
-    config: &SupabaseConfig,
-    token: &str,
-) -> Result<Option<UserDeckRow>, String> {
-    let req = fetch_deck_request(config, token);
-    let mut builder = CLIENT.get(&req.url);
-    for (k, v) in &req.headers {
-        builder = builder.header(k, v);
-    }
+pub struct ReqwestClient;
 
-    let resp = builder.send().await.map_err(|e| e.to_string())?;
-    let status = resp.status().as_u16();
+impl HttpClient for ReqwestClient {
+    async fn request(
+        &self,
+        method: &str,
+        url: &str,
+        headers: &[(String, String)],
+        body: Option<&str>,
+    ) -> Result<HttpResponse, String> {
+        let mut builder = match method {
+            "GET" => CLIENT.get(url),
+            "POST" => CLIENT.post(url),
+            _ => return Err(format!("Unsupported method: {}", method)),
+        };
+        for (k, v) in headers {
+            builder = builder.header(k, v);
+        }
+        if let Some(body) = body {
+            builder = builder.body(body.to_string());
+        }
 
-    if status == 406 || status == 404 {
-        return Ok(None);
-    }
-    if !resp.status().is_success() {
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Fetch failed ({}): {}", status, text));
-    }
-
-    let row: UserDeckRow = resp.json().await.map_err(|e| e.to_string())?;
-    Ok(Some(row))
-}
-
-/// Upsert the user's deck to Supabase.
-pub async fn upsert_user_deck(
-    config: &SupabaseConfig,
-    token: &str,
-    user_id: &str,
-    mode: StudyMode,
-    deck: &Deck,
-) -> Result<(), String> {
-    let req = upsert_deck_request(config, token, user_id, mode, deck);
-    let mut builder = CLIENT.post(&req.url);
-    for (k, v) in &req.headers {
-        builder = builder.header(k, v);
-    }
-    if let Some(body) = req.body {
-        builder = builder.body(body);
-    }
-
-    let resp = builder.send().await.map_err(|e| e.to_string())?;
-
-    if !resp.status().is_success() {
+        let resp = builder.send().await.map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Upsert failed ({}): {}", status, text));
+        let body = resp.text().await.unwrap_or_default();
+        Ok(HttpResponse { status, body })
     }
-
-    Ok(())
-}
-
-/// Log an answer to Supabase.
-pub async fn insert_answer_log(
-    config: &SupabaseConfig,
-    token: &str,
-    row: &AnswerLogRow,
-) -> Result<(), String> {
-    let req = insert_answer_log_request(config, token, row);
-    let mut builder = CLIENT.post(&req.url);
-    for (k, v) in &req.headers {
-        builder = builder.header(k, v);
-    }
-    if let Some(body) = req.body {
-        builder = builder.body(body);
-    }
-
-    let resp = builder.send().await.map_err(|e| e.to_string())?;
-
-    if !resp.status().is_success() {
-        let status = resp.status().as_u16();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Answer log failed ({}): {}", status, text));
-    }
-
-    Ok(())
-}
-
-/// Fetch recent answer logs from Supabase.
-pub async fn fetch_answer_logs(
-    config: &SupabaseConfig,
-    token: &str,
-    limit: u32,
-) -> Result<Vec<AnswerLogEntry>, String> {
-    let req = fetch_answer_logs_request(config, token, limit);
-    let mut builder = CLIENT.get(&req.url);
-    for (k, v) in &req.headers {
-        builder = builder.header(k, v);
-    }
-
-    let resp = builder.send().await.map_err(|e| e.to_string())?;
-
-    if !resp.status().is_success() {
-        let status = resp.status().as_u16();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Fetch logs failed ({}): {}", status, text));
-    }
-
-    resp.json::<Vec<AnswerLogEntry>>()
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Get coaching advice from the Claude-powered edge function.
-pub async fn get_coaching(config: &SupabaseConfig, token: &str) -> Result<String, String> {
-    let req = coaching_request(config, token);
-    let mut builder = CLIENT.post(&req.url);
-    for (k, v) in &req.headers {
-        builder = builder.header(k, v);
-    }
-    if let Some(body) = req.body {
-        builder = builder.body(body);
-    }
-
-    let resp = builder.send().await.map_err(|e| e.to_string())?;
-
-    if !resp.status().is_success() {
-        let status = resp.status().as_u16();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Coaching failed ({}): {}", status, text));
-    }
-
-    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    Ok(json
-        .get("coaching")
-        .and_then(|v| v.as_str())
-        .unwrap_or("No coaching available.")
-        .to_string())
 }

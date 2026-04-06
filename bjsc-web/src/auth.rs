@@ -58,31 +58,6 @@ pub fn clear_storage() {
     LocalStorage::delete(STORAGE_KEY);
 }
 
-/// Refresh the access token using the refresh token.
-pub async fn refresh_session(
-    config: &bjsc::supabase::SupabaseConfig,
-    state: &AuthState,
-) -> Option<AuthState> {
-    let req = bjsc::supabase::refresh_token_request(config, &state.refresh_token);
-
-    let builder = gloo_net::http::Request::post(&req.url);
-    let mut b = builder;
-    for (k, v) in &req.headers {
-        b = b.header(k, v);
-    }
-    let request = b.body(req.body?.as_str()).ok()?;
-    let resp = request.send().await.ok()?;
-
-    if !resp.ok() {
-        return None;
-    }
-
-    let json: serde_json::Value = resp.json().await.ok()?;
-    let new_state = bjsc::supabase::parse_refresh_response(&json, &state.refresh_token)?;
-    save_to_storage(&new_state);
-    Some(new_state)
-}
-
 /// Build the Google OAuth login URL via Supabase.
 pub fn google_login_url(supabase_url: &str) -> String {
     let redirect = web_sys::window()

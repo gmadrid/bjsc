@@ -68,11 +68,19 @@ impl App {
         // If authenticated, try to load from cloud (refresh token if needed)
         if let Some(ref mut auth) = auth {
             let config = supabase_config();
-            let result = rt.block_on(api::fetch_user_deck(&config, &auth.access_token));
+            let result = rt.block_on(bjsc::api::fetch_user_deck(
+                &api::ReqwestClient,
+                &config,
+                &auth.access_token,
+            ));
             let result = if result.is_err() {
                 // Try refreshing the token
                 if let Some(new_auth) = auth::refresh_tokens(&config, auth, &rt) {
-                    let r = rt.block_on(api::fetch_user_deck(&config, &new_auth.access_token));
+                    let r = rt.block_on(bjsc::api::fetch_user_deck(
+                        &api::ReqwestClient,
+                        &config,
+                        &new_auth.access_token,
+                    ));
                     *auth = new_auth;
                     r
                 } else {
@@ -281,7 +289,8 @@ impl App {
 
             let err_tx = self.sync_error_tx.clone();
             self.rt.spawn(async move {
-                let result = api::upsert_user_deck(
+                let result = bjsc::api::upsert_user_deck(
+                    &api::ReqwestClient,
                     &config,
                     &auth_clone.access_token,
                     &auth_clone.user_id,
@@ -290,8 +299,11 @@ impl App {
                 )
                 .await;
                 if let Err(e) = result {
-                    if let Some(new_auth) = auth::refresh_tokens_async(&config, &auth_clone).await {
-                        if let Err(e) = api::upsert_user_deck(
+                    if let Some(new_auth) =
+                        bjsc::api::refresh_session(&api::ReqwestClient, &config, &auth_clone).await
+                    {
+                        if let Err(e) = bjsc::api::upsert_user_deck(
+                            &api::ReqwestClient,
                             &config,
                             &new_auth.access_token,
                             &new_auth.user_id,
@@ -322,12 +334,21 @@ impl App {
             let auth_clone = auth.clone();
 
             self.rt.spawn(async move {
-                let result = api::get_coaching(&config, &auth_clone.access_token).await;
+                let result =
+                    bjsc::api::get_coaching(&api::ReqwestClient, &config, &auth_clone.access_token)
+                        .await;
 
                 // If failed, try refreshing token and retry
                 let result = if result.is_err() {
-                    if let Some(new_auth) = auth::refresh_tokens_async(&config, &auth_clone).await {
-                        api::get_coaching(&config, &new_auth.access_token).await
+                    if let Some(new_auth) =
+                        bjsc::api::refresh_session(&api::ReqwestClient, &config, &auth_clone).await
+                    {
+                        bjsc::api::get_coaching(
+                            &api::ReqwestClient,
+                            &config,
+                            &new_auth.access_token,
+                        )
+                        .await
                     } else {
                         result
                     }
@@ -364,10 +385,12 @@ impl App {
     fn refresh_progress(&mut self) {
         if let Some(ref auth) = self.auth {
             let config = supabase_config();
-            if let Ok(logs) =
-                self.rt
-                    .block_on(api::fetch_answer_logs(&config, &auth.access_token, 1000))
-            {
+            if let Ok(logs) = self.rt.block_on(bjsc::api::fetch_answer_logs(
+                &api::ReqwestClient,
+                &config,
+                &auth.access_token,
+                1000,
+            )) {
                 self.progress = bjsc::progress::ProgressStats::from_logs(&logs);
             }
         }
@@ -392,7 +415,9 @@ impl App {
             };
             let err_tx = self.sync_error_tx.clone();
             self.rt.spawn(async move {
-                if let Err(e) = api::insert_answer_log(&config, &token, &row).await {
+                if let Err(e) =
+                    bjsc::api::insert_answer_log(&api::ReqwestClient, &config, &token, &row).await
+                {
                     let _ = err_tx.send(format!("Log sync failed: {}", e));
                 }
             });

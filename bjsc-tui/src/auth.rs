@@ -71,31 +71,6 @@ pub fn refresh_tokens(
     Some(new_tokens)
 }
 
-/// Refresh the access token using the refresh token (async).
-pub async fn refresh_tokens_async(
-    config: &SupabaseConfig,
-    tokens: &AuthTokens,
-) -> Option<AuthTokens> {
-    let req = bjsc::supabase::refresh_token_request(config, &tokens.refresh_token);
-
-    let mut builder = crate::api::CLIENT.post(&req.url);
-    for (k, v) in &req.headers {
-        builder = builder.header(k, v);
-    }
-    if let Some(body) = req.body {
-        builder = builder.body(body);
-    }
-    let resp = builder.send().await.ok()?;
-    if !resp.status().is_success() {
-        return None;
-    }
-
-    let json: serde_json::Value = resp.json().await.ok()?;
-    let new_tokens = parse_refresh_response(&json, &tokens.refresh_token)?;
-    save_tokens(&new_tokens);
-    Some(new_tokens)
-}
-
 /// Run the browser-based OAuth flow.
 /// Opens the user's browser, waits for the redirect, extracts tokens.
 pub fn login(config: &SupabaseConfig) -> Result<AuthTokens, String> {
