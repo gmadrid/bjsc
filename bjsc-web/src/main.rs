@@ -350,9 +350,24 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 coaching_text.set("Loading coaching advice...".to_string());
                 if let Some(auth) = auth_state.get_untracked() {
                     let config = supabase_config();
-                    let token = auth.access_token.clone();
                     leptos::task::spawn_local(async move {
-                        match bjsc::api::get_coaching(&api::GlooClient, &config, &token).await {
+                        let mut token = auth.access_token.clone();
+                        let result =
+                            bjsc::api::get_coaching(&api::GlooClient, &config, &token).await;
+                        let result = if result.is_err() {
+                            if let Some(new_auth) =
+                                bjsc::api::refresh_session(&api::GlooClient, &config, &auth).await
+                            {
+                                token = new_auth.access_token.clone();
+                                auth_state.set(Some(new_auth));
+                                bjsc::api::get_coaching(&api::GlooClient, &config, &token).await
+                            } else {
+                                result
+                            }
+                        } else {
+                            result
+                        };
+                        match result {
                             Ok(text) => coaching_text.set(text),
                             Err(e) => coaching_text.set(format!("Error: {}", e)),
                         }
