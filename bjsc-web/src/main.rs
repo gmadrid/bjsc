@@ -105,7 +105,9 @@ fn log_answer_to_cloud(
     };
 
     leptos::task::spawn_local(async move {
-        let _ = api::insert_answer_log(&config, &token, &row).await;
+        if let Err(e) = api::insert_answer_log(&config, &token, &row).await {
+            web_sys::console::warn_1(&format!("Log sync failed: {}", e).into());
+        }
     });
 }
 
@@ -117,7 +119,9 @@ fn save_to_cloud(auth: &AuthState) {
     let (mode, deck) = GAME.with_borrow(|gs| (gs.study_mode(), gs.deck().clone()));
 
     leptos::task::spawn_local(async move {
-        let _ = api::upsert_user_deck(&config, &token, &user_id, mode, &deck).await;
+        if let Err(e) = api::upsert_user_deck(&config, &token, &user_id, mode, &deck).await {
+            web_sys::console::warn_1(&format!("Cloud save failed: {}", e).into());
+        }
     });
 }
 

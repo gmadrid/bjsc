@@ -36,6 +36,7 @@ enum Screen {
 enum StatusMessage {
     Correct(String),
     Wrong(String),
+    SyncError(String),
     None,
 }
 
@@ -51,6 +52,8 @@ struct App {
     coaching_text: String,
     coach_scroll: u16,
     coaching_rx: Option<mpsc::Receiver<String>>,
+    sync_error_tx: mpsc::Sender<String>,
+    sync_error_rx: mpsc::Receiver<String>,
     screen_picker: Option<usize>,
     confirm_quit: bool,
 }
@@ -92,6 +95,8 @@ impl App {
             StatusMessage::None
         };
 
+        let (sync_error_tx, sync_error_rx) = mpsc::channel();
+
         App {
             game_state,
             status,
@@ -104,6 +109,8 @@ impl App {
             coaching_text: String::new(),
             coach_scroll: 0,
             coaching_rx: None,
+            sync_error_tx,
+            sync_error_rx,
             screen_picker: None,
             confirm_quit: false,
         }
@@ -272,6 +279,7 @@ impl App {
             let mode = self.game_state.study_mode();
             let deck = self.game_state.deck().clone();
 
+            let err_tx = self.sync_error_tx.clone();
             self.rt.spawn(async move {
                 let result = api::upsert_user_deck(
                     &config,
@@ -281,17 +289,22 @@ impl App {
                     &deck,
                 )
                 .await;
-                if result.is_err() {
+                if let Err(e) = result {
                     if let Some(new_auth) = auth::refresh_tokens_async(&config, &auth_clone).await
                     {
-                        let _ = api::upsert_user_deck(
+                        if let Err(e) = api::upsert_user_deck(
                             &config,
                             &new_auth.access_token,
                             &new_auth.user_id,
                             mode,
                             &deck,
                         )
-                        .await;
+                        .await
+                        {
+                            let _ = err_tx.send(format!("Cloud save failed: {}", e));
+                        }
+                    } else {
+                        let _ = err_tx.send(format!("Cloud save failed: {}", e));
                     }
                 }
             });
@@ -345,6 +358,12 @@ impl App {
         }
     }
 
+    fn poll_sync_errors(&mut self) {
+        if let Ok(msg) = self.sync_error_rx.try_recv() {
+            self.status = StatusMessage::SyncError(msg);
+        }
+    }
+
     fn refresh_progress(&mut self) {
         if let Some(ref auth) = self.auth {
             let config = supabase_config();
@@ -374,8 +393,11 @@ impl App {
                 player_action: player_action.to_string(),
                 correct_action: correct_action.to_string(),
             };
+            let err_tx = self.sync_error_tx.clone();
             self.rt.spawn(async move {
-                let _ = api::insert_answer_log(&config, &token, &row).await;
+                if let Err(e) = api::insert_answer_log(&config, &token, &row).await {
+                    let _ = err_tx.send(format!("Log sync failed: {}", e));
+                }
             });
         }
     }
@@ -554,6 +576,9 @@ fn draw_play(f: &mut ratatui::Frame, area: Rect, app: &App) {
         }
         StatusMessage::Wrong(msg) => Paragraph::new(format!(" {} ", msg))
             .style(Style::default().fg(Color::White).bg(Color::Red)),
+        StatusMessage::SyncError(msg) => {
+            Paragraph::new(msg.as_str()).style(Style::default().fg(Color::Yellow))
+        }
         StatusMessage::None => Paragraph::new(""),
     };
     f.render_widget(status_widget, centered_line(chunks[4], 1));
@@ -1164,6 +1189,7 @@ fn main() -> io::Result<()> {
 
     loop {
         app.poll_coaching();
+        app.poll_sync_errors();
         draw(&mut terminal, &app)?;
 
         if event::poll(std::time::Duration::from_millis(100))? {
