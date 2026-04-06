@@ -48,10 +48,9 @@ pub fn refresh_tokens(
     rt: &tokio::runtime::Runtime,
 ) -> Option<AuthTokens> {
     let req = bjsc::supabase::refresh_token_request(config, &tokens.refresh_token);
-    let client = reqwest::Client::new();
 
     let result = rt.block_on(async {
-        let mut builder = client.post(&req.url);
+        let mut builder = crate::api::CLIENT.post(&req.url);
         for (k, v) in &req.headers {
             builder = builder.header(k, v);
         }
@@ -78,9 +77,8 @@ pub async fn refresh_tokens_async(
     tokens: &AuthTokens,
 ) -> Option<AuthTokens> {
     let req = bjsc::supabase::refresh_token_request(config, &tokens.refresh_token);
-    let client = reqwest::Client::new();
 
-    let mut builder = client.post(&req.url);
+    let mut builder = crate::api::CLIENT.post(&req.url);
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }

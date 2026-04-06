@@ -4,6 +4,9 @@ use bjsc::supabase::{
 };
 use bjsc::StudyMode;
 use spaced_rep::Deck;
+use std::sync::LazyLock;
+
+pub(crate) static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
 /// Fetch the user's deck from Supabase.
 pub async fn fetch_user_deck(
@@ -11,9 +14,7 @@ pub async fn fetch_user_deck(
     token: &str,
 ) -> Result<Option<UserDeckRow>, String> {
     let req = fetch_deck_request(config, token);
-    let client = reqwest::Client::new();
-
-    let mut builder = client.get(&req.url);
+    let mut builder = CLIENT.get(&req.url);
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }
@@ -42,9 +43,7 @@ pub async fn upsert_user_deck(
     deck: &Deck,
 ) -> Result<(), String> {
     let req = upsert_deck_request(config, token, user_id, mode, deck);
-    let client = reqwest::Client::new();
-
-    let mut builder = client.post(&req.url);
+    let mut builder = CLIENT.post(&req.url);
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }
@@ -70,9 +69,7 @@ pub async fn insert_answer_log(
     row: &AnswerLogRow,
 ) -> Result<(), String> {
     let req = insert_answer_log_request(config, token, row);
-    let client = reqwest::Client::new();
-
-    let mut builder = client.post(&req.url);
+    let mut builder = CLIENT.post(&req.url);
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }
@@ -98,9 +95,7 @@ pub async fn fetch_answer_logs(
     limit: u32,
 ) -> Result<Vec<AnswerLogEntry>, String> {
     let req = fetch_answer_logs_request(config, token, limit);
-    let client = reqwest::Client::new();
-
-    let mut builder = client.get(&req.url);
+    let mut builder = CLIENT.get(&req.url);
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }
@@ -121,9 +116,7 @@ pub async fn fetch_answer_logs(
 /// Get coaching advice from the Claude-powered edge function.
 pub async fn get_coaching(config: &SupabaseConfig, token: &str) -> Result<String, String> {
     let req = coaching_request(config, token);
-    let client = reqwest::Client::new();
-
-    let mut builder = client.post(&req.url);
+    let mut builder = CLIENT.post(&req.url);
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }
