@@ -93,13 +93,19 @@ impl Deck {
     }
 
     /// Record an answer for the given key.
-    /// Correct answers promote the item; wrong answers demote to box 0.
+    /// Correct answers promote the item only if it is due (to prevent
+    /// rapid advancement from repeated random encounters).
+    /// Wrong answers always demote to box 0.
     pub fn record(&mut self, key: &str, correct: bool) {
         let now = now_secs();
         self.last_key = Some(key.to_string());
         let item = self.items.entry(key.to_string()).or_default();
         if correct {
-            item.promote(now);
+            if item.is_due(now) {
+                item.promote(now);
+            } else {
+                item.times_correct += 1;
+            }
         } else {
             item.demote(now);
         }
@@ -292,10 +298,18 @@ mod tests {
         assert_eq!(item.box_level, 1);
     }
 
+    /// Helper: make an item due by backdating its last_reviewed.
+    fn make_due(deck: &mut Deck, key: &str) {
+        if let Some(item) = deck.items.get_mut(key) {
+            item.last_reviewed = 0;
+        }
+    }
+
     #[test]
     fn test_wrong_answer_demotes_to_box_0() {
         let mut deck = Deck::new();
         deck.record("item1", true);
+        make_due(&mut deck, "item1");
         deck.record("item1", true);
         assert_eq!(deck.get("item1").unwrap().box_level, 2);
         deck.record("item1", false);
@@ -307,9 +321,24 @@ mod tests {
     fn test_box_level_caps_at_max() {
         let mut deck = Deck::new();
         for _ in 0..20 {
+            make_due(&mut deck, "item1");
             deck.record("item1", true);
         }
         assert_eq!(deck.get("item1").unwrap().box_level, NUM_BOXES - 1);
+    }
+
+    #[test]
+    fn test_correct_answer_not_due_does_not_promote() {
+        let mut deck = Deck::new();
+        deck.record("item1", true); // box 0 -> 1
+        assert_eq!(deck.get("item1").unwrap().box_level, 1);
+
+        // Answer correctly again immediately (not due yet)
+        deck.record("item1", true);
+        // Should NOT promote — still box 1
+        assert_eq!(deck.get("item1").unwrap().box_level, 1);
+        // But times_correct should still increment
+        assert_eq!(deck.get("item1").unwrap().times_correct, 2);
     }
 
     #[test]
