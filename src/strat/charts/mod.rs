@@ -144,6 +144,7 @@ pub fn all_charts() -> Vec<StrategyChart> {
     };
 
     let hard_rows: Vec<(&str, Vec<&str>)> = (0..10)
+        .rev()
         .map(|r| {
             let label: &'static str = match r {
                 0 => "8",
@@ -165,6 +166,7 @@ pub fn all_charts() -> Vec<StrategyChart> {
         .collect();
 
     let soft_rows: Vec<(&str, Vec<&str>)> = (0..9)
+        .rev()
         .map(|r| {
             let label: &'static str = match r {
                 0 => "A,2",
@@ -185,6 +187,7 @@ pub fn all_charts() -> Vec<StrategyChart> {
         .collect();
 
     let split_rows: Vec<(&str, Vec<&str>)> = (0..10)
+        .rev()
         .map(|r| {
             let label: &'static str = match r {
                 0 => "A,A",
