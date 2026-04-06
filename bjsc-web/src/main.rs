@@ -28,6 +28,16 @@ impl Screen {
     }
 }
 
+fn local_date_string() -> String {
+    let d = js_sys::Date::new_0();
+    format!(
+        "{}-{:02}-{:02}",
+        d.get_full_year(),
+        d.get_month() + 1,
+        d.get_date()
+    )
+}
+
 thread_local! {
     static GAME: RefCell<GameState> = RefCell::new({
         let mut gs = GameState::default();
@@ -176,6 +186,8 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let show_shuffle = RwSignal::new(false);
     let screen = RwSignal::new(Screen::Play);
     let coaching_text = RwSignal::new(String::new());
+    let coaching_fetched_at_count = RwSignal::new(0u32);
+    let coaching_fetched_date = RwSignal::new(String::new());
     let progress_stats: RwSignal<bjsc::progress::ProgressStats> =
         RwSignal::new(bjsc::progress::ProgressStats::default());
     let loading = RwSignal::new(true);
@@ -322,16 +334,30 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             }
         }
         if next == Screen::Coach {
-            coaching_text.set("Loading coaching advice...".to_string());
-            if let Some(auth) = auth_state.get_untracked() {
-                let config = supabase_config();
-                let token = auth.access_token.clone();
-                leptos::task::spawn_local(async move {
-                    match bjsc::api::get_coaching(&api::GlooClient, &config, &token).await {
-                        Ok(text) => coaching_text.set(text),
-                        Err(e) => coaching_text.set(format!("Error: {}", e)),
-                    }
-                });
+            let current_count = GAME.with_borrow(|gs| gs.stats().question_count);
+            let questions_since =
+                current_count.saturating_sub(coaching_fetched_at_count.get_untracked());
+            let today = local_date_string();
+            let is_new_day = coaching_fetched_date.get_untracked() != today;
+            let never_fetched = coaching_text.get_untracked().is_empty();
+
+            let should_refresh =
+                never_fetched || questions_since >= 50 || (is_new_day && questions_since >= 1);
+
+            if should_refresh {
+                coaching_fetched_at_count.set(current_count);
+                coaching_fetched_date.set(today);
+                coaching_text.set("Loading coaching advice...".to_string());
+                if let Some(auth) = auth_state.get_untracked() {
+                    let config = supabase_config();
+                    let token = auth.access_token.clone();
+                    leptos::task::spawn_local(async move {
+                        match bjsc::api::get_coaching(&api::GlooClient, &config, &token).await {
+                            Ok(text) => coaching_text.set(text),
+                            Err(e) => coaching_text.set(format!("Error: {}", e)),
+                        }
+                    });
+                }
             }
         }
         screen.set(next);

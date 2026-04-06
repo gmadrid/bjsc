@@ -52,6 +52,8 @@ struct App {
     coaching_text: String,
     coach_scroll: u16,
     coaching_rx: Option<mpsc::Receiver<String>>,
+    coaching_fetched_at_count: u32,
+    coaching_fetched_date: String,
     sync_error_tx: mpsc::Sender<String>,
     sync_error_rx: mpsc::Receiver<String>,
     screen_picker: Option<usize>,
@@ -117,6 +119,8 @@ impl App {
             coaching_text: String::new(),
             coach_scroll: 0,
             coaching_rx: None,
+            coaching_fetched_at_count: 0,
+            coaching_fetched_date: String::new(),
             sync_error_tx,
             sync_error_rx,
             screen_picker: None,
@@ -145,7 +149,7 @@ impl App {
         if screen == Screen::Progress {
             self.refresh_progress();
         }
-        if screen == Screen::Coach {
+        if screen == Screen::Coach && self.should_refresh_coaching() {
             self.refresh_coaching();
         }
     }
@@ -322,10 +326,34 @@ impl App {
         }
     }
 
+    fn should_refresh_coaching(&self) -> bool {
+        // Never fetched
+        if self.coaching_text.is_empty() {
+            return true;
+        }
+        let current_count = self.game_state.stats().question_count;
+        let questions_since = current_count.saturating_sub(self.coaching_fetched_at_count);
+
+        // 50+ questions since last coaching
+        if questions_since >= 50 {
+            return true;
+        }
+
+        // Next day and at least 1 question since last coaching
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        if today != self.coaching_fetched_date && questions_since >= 1 {
+            return true;
+        }
+
+        false
+    }
+
     fn refresh_coaching(&mut self) {
         if let Some(ref auth) = self.auth {
             self.coaching_text = "Loading coaching advice...".to_string();
             self.coach_scroll = 0;
+            self.coaching_fetched_at_count = self.game_state.stats().question_count;
+            self.coaching_fetched_date = chrono::Local::now().format("%Y-%m-%d").to_string();
 
             let (tx, rx) = mpsc::channel();
             self.coaching_rx = Some(rx);
