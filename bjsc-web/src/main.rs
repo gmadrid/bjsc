@@ -9,6 +9,25 @@ use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Screen {
+    Play,
+    Stats,
+    Progress,
+    Coach,
+}
+
+impl Screen {
+    fn title(self) -> &'static str {
+        match self {
+            Screen::Play => "Play",
+            Screen::Stats => "Stats",
+            Screen::Progress => "Progress",
+            Screen::Coach => "Coach",
+        }
+    }
+}
+
 thread_local! {
     static GAME: RefCell<GameState> = RefCell::new({
         let mut gs = GameState::default();
@@ -155,8 +174,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let status_visible = RwSignal::new(false);
     let errors: RwSignal<Vec<String>> = RwSignal::new(vec![]);
     let show_shuffle = RwSignal::new(false);
-    // Screen: 0=play, 1=histogram, 2=progress, 3=coach
-    let screen = RwSignal::new(0u8);
+    let screen = RwSignal::new(Screen::Play);
     let coaching_text = RwSignal::new(String::new());
     let progress_stats: RwSignal<bjsc::progress::ProgressStats> =
         RwSignal::new(bjsc::progress::ProgressStats::default());
@@ -289,8 +307,8 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
 
     let menu_open = RwSignal::new(false);
 
-    let go_to_screen = move |next: u8| {
-        if next == 2 {
+    let go_to_screen = move |next: Screen| {
+        if next == Screen::Progress {
             if let Some(auth) = auth_state.get_untracked() {
                 let config = supabase_config();
                 let token = auth.access_token.clone();
@@ -303,7 +321,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 });
             }
         }
-        if next == 3 {
+        if next == Screen::Coach {
             coaching_text.set("Loading coaching advice...".to_string());
             if let Some(auth) = auth_state.get_untracked() {
                 let config = supabase_config();
@@ -331,7 +349,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 return;
             }
             let key = e.key();
-            if screen.get_untracked() != 0 {
+            if screen.get_untracked() != Screen::Play {
                 return;
             }
             if show_shuffle.get_untracked() {
@@ -371,14 +389,14 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             <div class="flex items-center gap-4 mb-4 py-2 border-b border-gray-700">
                 // Screen title
                 <h1 class="font-bold text-cyan-400 text-base m-0">
-                    {move || match screen.get() { 0 => "Play", 1 => "Stats", 2 => "Progress", 3 => "Coach", _ => "" }}
+                    {move || screen.get().title()}
                 </h1>
                 // Mode selector (play screen only)
                 <select
                     id="mode-select"
                     aria-label="Study mode"
                     class="text-sm px-2 py-1 border border-gray-600 rounded bg-slate-800 text-amber-300 font-bold cursor-pointer hover:border-cyan-400 focus:border-cyan-400 focus:outline-none"
-                    class:hidden=move || screen.get() != 0
+                    class:hidden=move || screen.get() != Screen::Play
                     on:change=move |ev| {
                         let val = leptos::prelude::event_target_value(&ev);
                         if let Some(mode) = bjsc::StudyMode::from_key(&val) {
@@ -426,31 +444,31 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 <nav class="flex flex-col px-2 py-2 gap-1">
                     <button
                         class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
-                        class:text-cyan-400=move || screen.get() == 0
-                        class:font-bold=move || screen.get() == 0
-                        class:text-gray-300=move || screen.get() != 0
-                        on:click=move |_| go_to_screen(0)
+                        class:text-cyan-400=move || screen.get() == Screen::Play
+                        class:font-bold=move || screen.get() == Screen::Play
+                        class:text-gray-300=move || screen.get() != Screen::Play
+                        on:click=move |_| go_to_screen(Screen::Play)
                     >"Play"</button>
                     <button
                         class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
-                        class:text-cyan-400=move || screen.get() == 1
-                        class:font-bold=move || screen.get() == 1
-                        class:text-gray-300=move || screen.get() != 1
-                        on:click=move |_| go_to_screen(1)
+                        class:text-cyan-400=move || screen.get() == Screen::Stats
+                        class:font-bold=move || screen.get() == Screen::Stats
+                        class:text-gray-300=move || screen.get() != Screen::Stats
+                        on:click=move |_| go_to_screen(Screen::Stats)
                     >"Stats"</button>
                     <button
                         class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
-                        class:text-cyan-400=move || screen.get() == 2
-                        class:font-bold=move || screen.get() == 2
-                        class:text-gray-300=move || screen.get() != 2
-                        on:click=move |_| go_to_screen(2)
+                        class:text-cyan-400=move || screen.get() == Screen::Progress
+                        class:font-bold=move || screen.get() == Screen::Progress
+                        class:text-gray-300=move || screen.get() != Screen::Progress
+                        on:click=move |_| go_to_screen(Screen::Progress)
                     >"Progress"</button>
                     <button
                         class="text-left px-3 py-2 rounded text-sm hover:bg-slate-800"
-                        class:text-cyan-400=move || screen.get() == 3
-                        class:font-bold=move || screen.get() == 3
-                        class:text-gray-300=move || screen.get() != 3
-                        on:click=move |_| go_to_screen(3)
+                        class:text-cyan-400=move || screen.get() == Screen::Coach
+                        class:font-bold=move || screen.get() == Screen::Coach
+                        class:text-gray-300=move || screen.get() != Screen::Coach
+                        on:click=move |_| go_to_screen(Screen::Coach)
                     >"Coach"</button>
                 </nav>
                 <div class="border-t border-gray-700 mx-2" />
@@ -482,9 +500,9 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
 }
 
 #[component]
-fn HistogramScreen(screen: RwSignal<u8>, game_data: RwSignal<DisplayData>) -> impl IntoView {
+fn HistogramScreen(screen: RwSignal<Screen>, game_data: RwSignal<DisplayData>) -> impl IntoView {
     view! {
-        <div class:hidden=move || screen.get() != 1>
+        <div class:hidden=move || screen.get() != Screen::Stats>
             <h2 class="font-bold text-cyan-400 text-lg mb-4">"Spaced Repetition Buckets"</h2>
             <div class="space-y-1.5">
                 {move || {
@@ -538,11 +556,11 @@ fn HistogramScreen(screen: RwSignal<u8>, game_data: RwSignal<DisplayData>) -> im
 
 #[component]
 fn ProgressScreen(
-    screen: RwSignal<u8>,
+    screen: RwSignal<Screen>,
     progress_stats: RwSignal<bjsc::progress::ProgressStats>,
 ) -> impl IntoView {
     view! {
-        <div class:hidden=move || screen.get() != 2>
+        <div class:hidden=move || screen.get() != Screen::Progress>
             <h2 class="font-bold text-cyan-400 text-lg mb-4">"Progress Dashboard"</h2>
 
             // Overall accuracy
@@ -617,7 +635,7 @@ fn ProgressScreen(
 }
 
 #[component]
-fn CoachScreen(screen: RwSignal<u8>, coaching_text: RwSignal<String>) -> impl IntoView {
+fn CoachScreen(screen: RwSignal<Screen>, coaching_text: RwSignal<String>) -> impl IntoView {
     let coaching_html = Memo::new(move |_| {
         let md = coaching_text.get();
         let parser = pulldown_cmark::Parser::new(&md);
@@ -627,7 +645,7 @@ fn CoachScreen(screen: RwSignal<u8>, coaching_text: RwSignal<String>) -> impl In
     });
 
     view! {
-        <div class:hidden=move || screen.get() != 3>
+        <div class:hidden=move || screen.get() != Screen::Coach>
             <h2 class="font-bold text-cyan-400 text-lg mb-4">"Coach (powered by Claude)"</h2>
             <div
                 class="border border-gray-700 rounded-md px-4 py-4 text-sm leading-relaxed prose prose-invert prose-sm max-w-none"
@@ -639,7 +657,7 @@ fn CoachScreen(screen: RwSignal<u8>, coaching_text: RwSignal<String>) -> impl In
 
 #[component]
 fn PlayScreen(
-    screen: RwSignal<u8>,
+    screen: RwSignal<Screen>,
     game_data: RwSignal<DisplayData>,
     status_text: RwSignal<String>,
     status_is_error: RwSignal<bool>,
@@ -650,7 +668,7 @@ fn PlayScreen(
     do_shuffle: impl Fn() + Copy + 'static,
 ) -> impl IntoView {
     view! {
-        <div class:hidden=move || screen.get() != 0>
+        <div class:hidden=move || screen.get() != Screen::Play>
             // Stats panel
             <div class="border border-gray-700 rounded-md px-4 py-3 mb-6">
                 <div class="font-bold text-cyan-400 text-sm uppercase tracking-wider mb-2">"Stats"</div>
