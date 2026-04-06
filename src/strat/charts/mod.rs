@@ -247,6 +247,7 @@ fn as_chart_column(ci: ColIndex) -> usize {
 mod test {
     use super::*;
     use crate::card::Card;
+    use crate::strat::{new_table_index, ColIndex, RowIndex, TableType};
     use std::str::FromStr;
 
     pub fn lookup_test_hands<C: Chart>(player: &[&str], dealer: &[&str]) -> BjResult<ChartAction> {
@@ -268,5 +269,187 @@ mod test {
             hand.add_card(card);
             hand
         })
+    }
+
+    fn make_index(tt: TableType, row: u8, col: u8) -> crate::strat::TableIndex {
+        let ri = RowIndex::new(tt, row).unwrap();
+        let ci: ColIndex = col.to_string().parse().unwrap();
+        new_table_index(ri, ci)
+    }
+
+    // --- ChartAction::apply_rules ---
+
+    #[test]
+    fn apply_rules_dblh_returns_double() {
+        assert_eq!(Some(Action::Double), ChartAction::DblH.apply_rules());
+    }
+
+    #[test]
+    fn apply_rules_dbls_returns_double() {
+        assert_eq!(Some(Action::Double), ChartAction::DblS.apply_rules());
+    }
+
+    #[test]
+    fn apply_rules_hit_returns_hit() {
+        assert_eq!(Some(Action::Hit), ChartAction::Hit_.apply_rules());
+    }
+
+    #[test]
+    fn apply_rules_stand_returns_stand() {
+        assert_eq!(Some(Action::Stand), ChartAction::Stnd.apply_rules());
+    }
+
+    #[test]
+    fn apply_rules_splt_returns_split() {
+        assert_eq!(Some(Action::Split), ChartAction::Splt.apply_rules());
+    }
+
+    #[test]
+    fn apply_rules_sdas_returns_split() {
+        assert_eq!(Some(Action::Split), ChartAction::SDas.apply_rules());
+    }
+
+    #[test]
+    fn apply_rules_noac_returns_none() {
+        assert_eq!(None, ChartAction::NoAc.apply_rules());
+    }
+
+    // --- lookup_action: correct strategy decisions ---
+
+    #[test]
+    fn lookup_action_hard_16_vs_7_is_hit() {
+        let (p, d) = make_hands(&["9H", "7C"], &["7S"]);
+        let (action, _) = lookup_action(&p, &d).unwrap();
+        assert_eq!(ChartAction::Hit_, action);
+    }
+
+    #[test]
+    fn lookup_action_hard_17_vs_6_is_stand() {
+        let (p, d) = make_hands(&["9H", "8C"], &["6S"]);
+        let (action, _) = lookup_action(&p, &d).unwrap();
+        assert_eq!(ChartAction::Stnd, action);
+    }
+
+    #[test]
+    fn lookup_action_hard_11_vs_5_is_double() {
+        let (p, d) = make_hands(&["5H", "6C"], &["5S"]);
+        let (action, _) = lookup_action(&p, &d).unwrap();
+        assert_eq!(ChartAction::DblH, action);
+    }
+
+    #[test]
+    fn lookup_action_aces_pair_vs_6_is_split() {
+        let (p, d) = make_hands(&["AH", "AC"], &["6S"]);
+        let (action, _) = lookup_action(&p, &d).unwrap();
+        // Aces always split
+        assert_eq!(ChartAction::Splt, action);
+    }
+
+    #[test]
+    fn lookup_action_eights_pair_vs_9_is_split() {
+        let (p, d) = make_hands(&["8H", "8C"], &["9S"]);
+        let (action, _) = lookup_action(&p, &d).unwrap();
+        assert_eq!(ChartAction::Splt, action);
+    }
+
+    #[test]
+    fn lookup_action_soft_18_vs_2_is_double() {
+        let (p, d) = make_hands(&["AH", "7C"], &["2S"]);
+        let (action, _) = lookup_action(&p, &d).unwrap();
+        assert_eq!(ChartAction::DblS, action);
+    }
+
+    #[test]
+    fn lookup_action_soft_18_vs_7_is_stand() {
+        let (p, d) = make_hands(&["AH", "7C"], &["7S"]);
+        let (action, _) = lookup_action(&p, &d).unwrap();
+        assert_eq!(ChartAction::Stnd, action);
+    }
+
+    #[test]
+    fn lookup_action_returns_table_index() {
+        let (p, d) = make_hands(&["9H", "8C"], &["6S"]);
+        let (_, idx) = lookup_action(&p, &d).unwrap();
+        assert!(idx.is_some());
+    }
+
+    #[test]
+    fn lookup_action_error_on_missing_dealer_card() {
+        let player: Hand = "9H 8C".parse().unwrap();
+        let dealer = Hand::default(); // empty
+        assert!(lookup_action(&player, &dealer).is_err());
+    }
+
+    // --- lookup_by_index ---
+
+    #[test]
+    fn lookup_by_index_hard_8_is_hit() {
+        let idx = make_index(TableType::Hard, 8, 5);
+        assert_eq!(ChartAction::Hit_, lookup_by_index(&idx).unwrap());
+    }
+
+    #[test]
+    fn lookup_by_index_hard_17_is_stand() {
+        let idx = make_index(TableType::Hard, 17, 7);
+        assert_eq!(ChartAction::Stnd, lookup_by_index(&idx).unwrap());
+    }
+
+    #[test]
+    fn lookup_by_index_hard_11_vs_ace_is_double() {
+        // Dealer Ace = col 1
+        let idx = make_index(TableType::Hard, 11, 1);
+        assert_eq!(ChartAction::DblH, lookup_by_index(&idx).unwrap());
+    }
+
+    #[test]
+    fn lookup_by_index_soft_18_vs_2_is_double() {
+        // Soft 18 (A,7) vs dealer 2
+        let idx = make_index(TableType::Soft, 18, 2);
+        assert_eq!(ChartAction::DblS, lookup_by_index(&idx).unwrap());
+    }
+
+    #[test]
+    fn lookup_by_index_soft_20_vs_any_is_stand() {
+        for col in 1u8..=10 {
+            let idx = make_index(TableType::Soft, 20, col);
+            assert_eq!(ChartAction::Stnd, lookup_by_index(&idx).unwrap());
+        }
+    }
+
+    #[test]
+    fn lookup_by_index_split_aces_always_split() {
+        // Row 1 = Aces
+        for col in 1u8..=10 {
+            let idx = make_index(TableType::Split, 1, col);
+            assert_eq!(ChartAction::Splt, lookup_by_index(&idx).unwrap());
+        }
+    }
+
+    #[test]
+    fn lookup_by_index_split_tens_never_split() {
+        // Row 10 = tens
+        for col in 1u8..=10 {
+            let idx = make_index(TableType::Split, 10, col);
+            assert_eq!(ChartAction::NoAc, lookup_by_index(&idx).unwrap());
+        }
+    }
+
+    #[test]
+    fn lookup_by_index_surrender_always_no_action() {
+        let idx = make_index(TableType::Surrender, 16, 9);
+        assert_eq!(ChartAction::NoAc, lookup_by_index(&idx).unwrap());
+    }
+
+    #[test]
+    fn lookup_by_index_soft_valid_range_13_to_21() {
+        // Confirm all valid soft rows (13-21) look up without error
+        for row in 13u8..=21 {
+            let idx = make_index(TableType::Soft, row, 5);
+            assert!(
+                lookup_by_index(&idx).is_ok(),
+                "lookup_by_index failed for soft:{}",
+                row
+            );
+        }
     }
 }

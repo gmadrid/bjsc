@@ -209,3 +209,194 @@ pub fn all_phrases() -> Vec<(&'static str, Vec<&'static str>)> {
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- phrase_for_row(): returns non-error strings for all known rows ---
+
+    #[test]
+    fn phrase_for_row_hard_8_through_17_all_return_real_phrases() {
+        for row in 8u8..=17 {
+            let ri = RowIndex::new(Hard, row).unwrap();
+            let phrase = phrase_for_row(ri);
+            assert!(
+                !phrase.starts_with("Internal Error"),
+                "unexpected error phrase for hard:{}: {}",
+                row,
+                phrase
+            );
+            assert!(!phrase.is_empty());
+        }
+    }
+
+    #[test]
+    fn phrase_for_row_soft_13_through_21_all_return_real_phrases() {
+        for row in 13u8..=21 {
+            let ri = RowIndex::new(Soft, row).unwrap();
+            let phrase = phrase_for_row(ri);
+            assert!(
+                !phrase.starts_with("Internal Error"),
+                "unexpected error phrase for soft:{}: {}",
+                row,
+                phrase
+            );
+            assert!(!phrase.is_empty());
+        }
+    }
+
+    #[test]
+    fn phrase_for_row_split_1_through_10_all_return_real_phrases() {
+        for row in 1u8..=10 {
+            let ri = RowIndex::new(Split, row).unwrap();
+            let phrase = phrase_for_row(ri);
+            assert!(
+                !phrase.starts_with("Internal Error"),
+                "unexpected error phrase for split:{}: {}",
+                row,
+                phrase
+            );
+            assert!(!phrase.is_empty());
+        }
+    }
+
+    #[test]
+    fn phrase_for_row_surrender_15_and_16_return_real_phrases() {
+        for row in [15u8, 16] {
+            let ri = RowIndex::new(Surrender, row).unwrap();
+            let phrase = phrase_for_row(ri);
+            assert!(
+                !phrase.starts_with("Internal Error"),
+                "unexpected error phrase for surrender:{}: {}",
+                row,
+                phrase
+            );
+            assert!(!phrase.is_empty());
+        }
+    }
+
+    #[test]
+    fn phrase_for_row_unknown_row_index_returns_internal_error() {
+        // RowIndex::new validates the range, so build one for a valid row but
+        // a type that has no phrase entry. Use Hard:2 which is valid for the table
+        // type range check but absent from PHRASES.
+        let ri = RowIndex::new(Hard, 2).unwrap();
+        let phrase = phrase_for_row(ri);
+        assert!(
+            phrase.starts_with("Internal Error"),
+            "expected internal error phrase, got: {}",
+            phrase
+        );
+    }
+
+    // --- specific phrase content spot-checks ---
+
+    #[test]
+    fn phrase_for_row_hard_11_mentions_always_doubles() {
+        let ri = RowIndex::new(Hard, 11).unwrap();
+        let phrase = phrase_for_row(ri);
+        assert!(
+            phrase.contains("always") || phrase.contains("double") || phrase.contains("Double"),
+            "unexpected phrase for hard:11: {}",
+            phrase
+        );
+    }
+
+    #[test]
+    fn phrase_for_row_split_aces_mentions_split() {
+        let ri = RowIndex::new(Split, 1).unwrap();
+        let phrase = phrase_for_row(ri);
+        assert!(
+            phrase.contains("split") || phrase.contains("Split"),
+            "unexpected phrase for split:1: {}",
+            phrase
+        );
+    }
+
+    // --- all_phrases(): structure ---
+
+    #[test]
+    fn all_phrases_returns_four_categories() {
+        let phrases = all_phrases();
+        assert_eq!(4, phrases.len());
+    }
+
+    #[test]
+    fn all_phrases_category_names_are_correct() {
+        let phrases = all_phrases();
+        let names: Vec<&str> = phrases.iter().map(|(name, _)| *name).collect();
+        assert!(names.contains(&"Surrender"));
+        assert!(names.contains(&"Splits"));
+        assert!(names.contains(&"Soft Totals"));
+        assert!(names.contains(&"Hard Totals"));
+    }
+
+    #[test]
+    fn all_phrases_surrender_has_two_entries() {
+        let phrases = all_phrases();
+        let surrender = phrases
+            .iter()
+            .find(|(name, _)| *name == "Surrender")
+            .unwrap();
+        assert_eq!(2, surrender.1.len());
+    }
+
+    #[test]
+    fn all_phrases_splits_has_ten_entries() {
+        let phrases = all_phrases();
+        let splits = phrases.iter().find(|(name, _)| *name == "Splits").unwrap();
+        assert_eq!(10, splits.1.len());
+    }
+
+    #[test]
+    fn all_phrases_soft_totals_has_nine_entries() {
+        let phrases = all_phrases();
+        let soft = phrases
+            .iter()
+            .find(|(name, _)| *name == "Soft Totals")
+            .unwrap();
+        // 13..=21 = 9 rows
+        assert_eq!(9, soft.1.len());
+    }
+
+    #[test]
+    fn all_phrases_hard_totals_has_ten_entries() {
+        let phrases = all_phrases();
+        let hard = phrases
+            .iter()
+            .find(|(name, _)| *name == "Hard Totals")
+            .unwrap();
+        // 8..=17 = 10 rows
+        assert_eq!(10, hard.1.len());
+    }
+
+    #[test]
+    fn all_phrases_no_entry_starts_with_internal_error() {
+        let phrases = all_phrases();
+        for (cat, entries) in &phrases {
+            for phrase in entries {
+                assert!(
+                    !phrase.starts_with("Internal Error"),
+                    "Internal Error phrase found in category '{}': {}",
+                    cat,
+                    phrase
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn all_phrases_no_entry_is_empty() {
+        let phrases = all_phrases();
+        for (cat, entries) in &phrases {
+            for phrase in entries {
+                assert!(
+                    !phrase.is_empty(),
+                    "Empty phrase found in category '{}'",
+                    cat
+                );
+            }
+        }
+    }
+}

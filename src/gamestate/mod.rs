@@ -278,3 +278,203 @@ impl Default for GameState {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper: build a hand from a space-separated card string using FromStr.
+    fn parse_hand(s: &str) -> Hand {
+        s.parse().unwrap()
+    }
+
+    // --- AnswerResult::status_message ---
+
+    #[test]
+    fn status_message_correct_shows_player_action() {
+        let result = AnswerResult {
+            correct: true,
+            correct_action: Some(Action::Stand),
+            player_action: Action::Stand,
+            log_entry: None,
+            table_index: None,
+            table_index_key: None,
+        };
+        assert_eq!("Correct: Stand", result.status_message());
+    }
+
+    #[test]
+    fn status_message_wrong_shows_correct_action() {
+        let result = AnswerResult {
+            correct: false,
+            correct_action: Some(Action::Double),
+            player_action: Action::Hit,
+            log_entry: None,
+            table_index: None,
+            table_index_key: None,
+        };
+        assert_eq!("WRONG: Double", result.status_message());
+    }
+
+    #[test]
+    fn status_message_wrong_no_correct_action_shows_empty() {
+        let result = AnswerResult {
+            correct: false,
+            correct_action: None,
+            player_action: Action::Hit,
+            log_entry: None,
+            table_index: None,
+            table_index_key: None,
+        };
+        assert_eq!("WRONG: ", result.status_message());
+    }
+
+    // --- AnswerResult::log_data ---
+
+    #[test]
+    fn log_data_with_key_returns_some_tuple() {
+        let result = AnswerResult {
+            correct: true,
+            correct_action: Some(Action::Stand),
+            player_action: Action::Stand,
+            log_entry: None,
+            table_index: None,
+            table_index_key: Some("hard:16,9".to_string()),
+        };
+        let data = result.log_data().unwrap();
+        assert_eq!("hard:16,9", data.0);
+        assert!(data.1); // correct
+        assert_eq!("Stand", data.2); // player_action
+        assert_eq!("Stand", data.3); // correct_action
+    }
+
+    #[test]
+    fn log_data_without_key_returns_none() {
+        let result = AnswerResult {
+            correct: false,
+            correct_action: Some(Action::Hit),
+            player_action: Action::Stand,
+            log_entry: None,
+            table_index: None,
+            table_index_key: None,
+        };
+        assert!(result.log_data().is_none());
+    }
+
+    #[test]
+    fn log_data_wrong_answer_correct_field_is_false() {
+        let result = AnswerResult {
+            correct: false,
+            correct_action: Some(Action::Double),
+            player_action: Action::Hit,
+            log_entry: None,
+            table_index: None,
+            table_index_key: Some("hard:11,5".to_string()),
+        };
+        let data = result.log_data().unwrap();
+        assert!(!data.1); // correct = false
+        assert_eq!("Hit", data.2); // player_action
+        assert_eq!("Double", data.3); // correct_action
+    }
+
+    // --- GameState::check_answer ---
+
+    #[test]
+    fn check_answer_correct_returns_correct_true() {
+        // Hard 16 vs dealer 7 -> Hit is correct
+        let mut gs = GameState::new();
+        // Build hands manually
+        gs.player_hand = parse_hand("9H 7C"); // hard 16
+        gs.dealer_hand = parse_hand("7S"); // dealer 7
+        let result = gs.check_answer(Action::Hit).unwrap();
+        assert!(result.correct);
+        assert_eq!(Action::Hit, result.player_action);
+    }
+
+    #[test]
+    fn check_answer_wrong_returns_correct_false() {
+        // Hard 16 vs dealer 7 -> Hit is correct, Stand is wrong
+        let mut gs = GameState::new();
+        gs.player_hand = parse_hand("9H 7C");
+        gs.dealer_hand = parse_hand("7S");
+        let result = gs.check_answer(Action::Stand).unwrap();
+        assert!(!result.correct);
+        assert_eq!(Action::Stand, result.player_action);
+        assert_eq!(Some(Action::Hit), result.correct_action);
+    }
+
+    #[test]
+    fn check_answer_wrong_produces_log_entry() {
+        // Hard 17 vs dealer 6 -> Stand is correct, Hit is wrong
+        let mut gs = GameState::new();
+        gs.player_hand = parse_hand("9H 8C"); // hard 17
+        gs.dealer_hand = parse_hand("6S");
+        let result = gs.check_answer(Action::Hit).unwrap();
+        assert!(!result.correct);
+        assert!(result.log_entry.is_some());
+    }
+
+    #[test]
+    fn check_answer_correct_produces_no_log_entry() {
+        // Hard 17 vs dealer 6 -> Stand is correct
+        let mut gs = GameState::new();
+        gs.player_hand = parse_hand("9H 8C");
+        gs.dealer_hand = parse_hand("6S");
+        let result = gs.check_answer(Action::Stand).unwrap();
+        assert!(result.correct);
+        assert!(result.log_entry.is_none());
+    }
+
+    #[test]
+    fn check_answer_updates_stats_on_correct() {
+        let mut gs = GameState::new();
+        gs.player_hand = parse_hand("9H 8C"); // hard 17
+        gs.dealer_hand = parse_hand("5S");
+        gs.check_answer(Action::Stand).unwrap();
+        assert_eq!(1, gs.stats().question_count);
+        assert_eq!(0, gs.stats().questions_wrong);
+    }
+
+    #[test]
+    fn check_answer_updates_stats_on_wrong() {
+        let mut gs = GameState::new();
+        gs.player_hand = parse_hand("9H 8C"); // hard 17
+        gs.dealer_hand = parse_hand("5S");
+        gs.check_answer(Action::Hit).unwrap();
+        assert_eq!(1, gs.stats().question_count);
+        assert_eq!(1, gs.stats().questions_wrong);
+    }
+
+    #[test]
+    fn check_answer_table_index_key_is_populated() {
+        let mut gs = GameState::new();
+        gs.player_hand = parse_hand("9H 8C"); // hard 17
+        gs.dealer_hand = parse_hand("5S");
+        let result = gs.check_answer(Action::Stand).unwrap();
+        assert!(result.table_index_key.is_some());
+        // The key should parse back to a valid TableIndex
+        let key = result.table_index_key.unwrap();
+        let ti: crate::strat::TableIndex = key.parse().unwrap();
+        assert_eq!(crate::strat::TableType::Hard, ti.table_type());
+    }
+
+    #[test]
+    fn check_answer_double_eleven_vs_five() {
+        // Hard 11 vs dealer 5 -> Double is correct
+        let mut gs = GameState::new();
+        gs.player_hand = parse_hand("5H 6C"); // hard 11
+        gs.dealer_hand = parse_hand("5S");
+        let result = gs.check_answer(Action::Double).unwrap();
+        assert!(result.correct);
+    }
+
+    #[test]
+    fn check_answer_split_aces_returns_split() {
+        // Pair of Aces vs dealer 5 -> Split is always correct
+        let mut gs = GameState::new();
+        gs.player_hand = parse_hand("AH AC");
+        gs.dealer_hand = parse_hand("5S");
+        let result = gs.check_answer(Action::Split).unwrap();
+        assert!(result.correct);
+    }
+}

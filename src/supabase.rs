@@ -305,13 +305,37 @@ fn base64_decode(input: &str) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
 
+    // All test JWTs use a fake signature "fake_sig" — we never verify signatures.
+    // Payloads are real base64url-encoded JSON.
+
+    // Payload: {"sub":"12345678-abcd-1234-abcd-123456789abc","role":"authenticated"}
+    const JWT_WITH_SUB: &str =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
+         .eyJzdWIiOiIxMjM0NTY3OC1hYmNkLTEyMzQtYWJjZC0xMjM0NTY3ODlhYmMiLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9\
+         .fake_signature";
+
+    // Payload: {"sub":"user-abc","email":"test@example.com","exp":9999999999}
+    // exp = 9999999999 (year 2286) - clearly not expired
+    const JWT_NOT_EXPIRED: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
+         .eyJzdWIiOiJ1c2VyLWFiYyIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsImV4cCI6OTk5OTk5OTk5OX0\
+         .fake_sig";
+
+    // Payload: {"sub":"user-abc","email":"test@example.com","exp":1}
+    // exp = 1 (Unix epoch + 1s) - always expired
+    const JWT_EXPIRED: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
+         .eyJzdWIiOiJ1c2VyLWFiYyIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsImV4cCI6MX0\
+         .fake_sig";
+
+    // Payload: {"sub":"user-abc"} — no exp claim
+    const JWT_NO_EXP: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
+         .eyJzdWIiOiJ1c2VyLWFiYyJ9\
+         .fake_sig";
+
+    // --- user_id_from_jwt ---
+
     #[test]
     fn test_user_id_from_jwt() {
-        // A fake JWT with sub claim
-        // Header: {"alg":"HS256","typ":"JWT"}
-        // Payload: {"sub":"12345678-abcd-1234-abcd-123456789abc","role":"authenticated"}
-        let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3OC1hYmNkLTEyMzQtYWJjZC0xMjM0NTY3ODlhYmMiLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.fake_signature";
-        let uid = user_id_from_jwt(token);
+        let uid = user_id_from_jwt(JWT_WITH_SUB);
         assert_eq!(
             uid,
             Some("12345678-abcd-1234-abcd-123456789abc".to_string())
@@ -322,5 +346,109 @@ mod tests {
     fn test_user_id_from_invalid_jwt() {
         assert_eq!(user_id_from_jwt("not-a-jwt"), None);
         assert_eq!(user_id_from_jwt(""), None);
+    }
+
+    #[test]
+    fn user_id_from_jwt_two_parts_only_returns_none() {
+        assert_eq!(None, user_id_from_jwt("header.payload"));
+    }
+
+    // --- email_from_jwt ---
+
+    #[test]
+    fn email_from_jwt_with_email_claim() {
+        let email = email_from_jwt(JWT_NOT_EXPIRED);
+        assert_eq!(Some("test@example.com".to_string()), email);
+    }
+
+    #[test]
+    fn email_from_jwt_without_email_claim_returns_none() {
+        // JWT_WITH_SUB has no email field
+        let email = email_from_jwt(JWT_WITH_SUB);
+        assert_eq!(None, email);
+    }
+
+    #[test]
+    fn email_from_jwt_invalid_token_returns_none() {
+        assert_eq!(None, email_from_jwt("not.a.token"));
+    }
+
+    // --- is_jwt_expired ---
+
+    #[test]
+    fn is_jwt_expired_far_future_exp_returns_false() {
+        assert!(!is_jwt_expired(JWT_NOT_EXPIRED));
+    }
+
+    #[test]
+    fn is_jwt_expired_past_exp_returns_true() {
+        assert!(is_jwt_expired(JWT_EXPIRED));
+    }
+
+    #[test]
+    fn is_jwt_expired_no_exp_claim_returns_true() {
+        assert!(is_jwt_expired(JWT_NO_EXP));
+    }
+
+    #[test]
+    fn is_jwt_expired_malformed_token_returns_true() {
+        assert!(is_jwt_expired("not-a-token"));
+        assert!(is_jwt_expired(""));
+        assert!(is_jwt_expired("only.two-parts"));
+    }
+
+    #[test]
+    fn is_jwt_expired_invalid_base64_payload_returns_true() {
+        // Second segment is not valid base64
+        assert!(is_jwt_expired("header.!!!invalid!!!.sig"));
+    }
+
+    // --- parse_refresh_response ---
+
+    #[test]
+    fn parse_refresh_response_with_all_fields() {
+        let json = serde_json::json!({
+            "access_token": JWT_NOT_EXPIRED,
+            "refresh_token": "new_refresh_token_xyz",
+        });
+        let session = parse_refresh_response(&json, "old_refresh_token").unwrap();
+        assert_eq!(JWT_NOT_EXPIRED, session.access_token);
+        assert_eq!("new_refresh_token_xyz", session.refresh_token);
+        assert_eq!("user-abc", session.user_id);
+        assert_eq!("test@example.com", session.email);
+    }
+
+    #[test]
+    fn parse_refresh_response_falls_back_to_old_refresh_token_when_missing() {
+        let json = serde_json::json!({
+            "access_token": JWT_NOT_EXPIRED,
+            // no refresh_token key
+        });
+        let session = parse_refresh_response(&json, "old_refresh_token").unwrap();
+        assert_eq!("old_refresh_token", session.refresh_token);
+    }
+
+    #[test]
+    fn parse_refresh_response_missing_access_token_returns_none() {
+        let json = serde_json::json!({
+            "refresh_token": "some_refresh",
+        });
+        assert!(parse_refresh_response(&json, "old").is_none());
+    }
+
+    #[test]
+    fn parse_refresh_response_invalid_access_token_no_sub_returns_none() {
+        // JWT_NO_EXP has no sub claim -> user_id_from_jwt returns None -> parse returns None
+        let json = serde_json::json!({
+            "access_token": "header.payload.sig",
+            "refresh_token": "some_refresh",
+        });
+        assert!(parse_refresh_response(&json, "old").is_none());
+    }
+
+    #[test]
+    fn parse_refresh_response_empty_json_returns_none() {
+        let json = serde_json::json!({});
+        assert!(parse_refresh_response(&json, "old").is_none());
     }
 }
