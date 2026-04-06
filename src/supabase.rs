@@ -232,6 +232,22 @@ fn jwt_payload(token: &str) -> Option<serde_json::Value> {
     serde_json::from_slice(&decoded).ok()
 }
 
+/// Check if a JWT's `exp` claim is in the past (with a 60-second buffer).
+pub fn is_jwt_expired(token: &str) -> bool {
+    let Some(payload) = jwt_payload(token) else {
+        return true;
+    };
+    let Some(exp) = payload.get("exp").and_then(|v| v.as_u64()) else {
+        return true;
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    // Treat as expired if within 60 seconds of expiry
+    now + 60 >= exp
+}
+
 /// Extract the `sub` (user ID) from a JWT without verification.
 pub fn user_id_from_jwt(token: &str) -> Option<String> {
     jwt_payload(token)?

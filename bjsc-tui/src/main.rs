@@ -67,30 +67,22 @@ impl App {
         game_state.set_deck(saved.deck);
         game_state.set_study_mode(saved.mode);
 
-        // If authenticated, try to load from cloud (refresh token if needed)
+        // If authenticated, refresh token if expired, then load from cloud
         if let Some(ref mut auth) = auth {
             let config = supabase_config();
+
+            // Proactively refresh if token is expired
+            if bjsc::supabase::is_jwt_expired(&auth.access_token) {
+                if let Some(new_auth) = auth::refresh_tokens(&config, auth, &rt) {
+                    *auth = new_auth;
+                }
+            }
+
             let result = rt.block_on(bjsc::api::fetch_user_deck(
                 &api::ReqwestClient,
                 &config,
                 &auth.access_token,
             ));
-            let result = if result.is_err() {
-                // Try refreshing the token
-                if let Some(new_auth) = auth::refresh_tokens(&config, auth, &rt) {
-                    let r = rt.block_on(bjsc::api::fetch_user_deck(
-                        &api::ReqwestClient,
-                        &config,
-                        &new_auth.access_token,
-                    ));
-                    *auth = new_auth;
-                    r
-                } else {
-                    result
-                }
-            } else {
-                result
-            };
             if let Ok(Some(row)) = result {
                 game_state.set_deck(row.deck);
                 game_state.set_study_mode(row.study_mode);
