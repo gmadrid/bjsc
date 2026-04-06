@@ -456,13 +456,14 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                         view! { <option value={key}>{label}</option> }
                     }).collect::<Vec<_>>()}
                 </select>
-                // Hamburger menu button (right side)
+                // Username + hamburger menu (right side)
+                <span class="ml-auto text-xs text-gray-500">{move || auth_state.get().map(|a| a.email).unwrap_or_default()}</span>
                 <button
                     aria-label="Menu"
-                    class="ml-auto text-sm px-3 py-1 border border-gray-600 rounded bg-slate-800 text-gray-400 cursor-pointer hover:bg-slate-700 hover:border-cyan-400"
+                    class="text-2xl leading-none w-10 h-10 pb-1 flex items-center justify-center border border-gray-600 rounded text-gray-400 cursor-pointer hover:text-cyan-400 hover:border-cyan-400"
                     on:click=move |_| menu_open.set(!menu_open.get_untracked())
                 >
-                    {move || auth_state.get().map(|a| a.email).unwrap_or_else(|| "\u{2630}".to_string())}
+                    "\u{2630}"
                 </button>
             </div>
 
