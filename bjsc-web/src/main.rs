@@ -57,32 +57,42 @@ fn main() {
     leptos::mount::mount_to_body(App);
 }
 
-/// Schedule a timer to auto-refresh the display when the next drill card becomes due.
+/// Start a 1-second interval that ticks the countdown display while drill-waiting.
+/// When a card becomes due, deals it and clears the interval.
+/// If not in drill-waiting state, clears any existing interval.
 fn schedule_drill_timer(timer_id: RwSignal<Option<i32>>, game_display: RwSignal<DisplayData>) {
-    // Clear existing timer
+    // Clear existing interval
     if let Some(id) = timer_id.get_untracked() {
         if let Some(w) = web_sys::window() {
-            w.clear_timeout_with_handle(id);
+            w.clear_interval_with_handle(id);
         }
         timer_id.set(None);
     }
 
     let wait = GAME.with_borrow(|gs| gs.drill_wait_secs());
-    if let Some(secs) = wait {
+    if wait.is_some() {
         let cb = Closure::<dyn FnMut()>::new(move || {
-            // Try to deal
-            GAME.with_borrow_mut(|gs| {
-                gs.deal_a_hand();
-            });
+            // Check if a card is now due
+            let ready = GAME.with_borrow(|gs| gs.drill_wait_secs().is_none());
+            if ready {
+                GAME.with_borrow_mut(|gs| {
+                    gs.deal_a_hand();
+                });
+                // Clear the interval
+                if let Some(id) = timer_id.get_untracked() {
+                    if let Some(w) = web_sys::window() {
+                        w.clear_interval_with_handle(id);
+                    }
+                    timer_id.set(None);
+                }
+            }
+            // Refresh display (updates countdown or shows new card)
             game_display.set(read_display());
-            // If still waiting, reschedule
-            schedule_drill_timer(timer_id, game_display);
         });
         if let Some(w) = web_sys::window() {
-            let ms = ((secs + 1).saturating_mul(1000)).min(i32::MAX as u64) as i32;
-            if let Ok(id) = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+            if let Ok(id) = w.set_interval_with_callback_and_timeout_and_arguments_0(
                 cb.as_ref().unchecked_ref(),
-                ms,
+                1000,
             ) {
                 timer_id.set(Some(id));
             }
