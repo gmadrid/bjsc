@@ -320,6 +320,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             };
             (result, shoe_done)
         });
+        let is_drill = GAME.with_borrow(|gs| gs.study_mode() == bjsc::StudyMode::Drill);
         if let (Some(result), shoe_done) = outcome {
             let log_data = result.log_data();
             status_text.set(result.status_message());
@@ -330,7 +331,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 }
             }
             status_visible.set(true);
-            if shoe_done {
+            if shoe_done && !is_drill {
                 show_shuffle.set(true);
             }
 
