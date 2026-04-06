@@ -71,6 +71,7 @@ struct DisplayData {
     weak_count: u32,
     mastered_count: u32,
     due_count: u32,
+    mode_key: String,
 }
 
 fn read_display() -> DisplayData {
@@ -85,6 +86,7 @@ fn read_display() -> DisplayData {
             soft: Stats::numbers_string(s.soft_count, s.soft_wrong),
             split: Stats::numbers_string(s.split_count, s.split_wrong),
             double: Stats::numbers_string(s.double_count, s.double_wrong),
+            mode_key: gs.study_mode().key().to_string(),
             box_counts: gs.box_counts(),
             box_due: gs.box_due_counts(),
             unseen: gs.unseen_count(),
@@ -444,9 +446,7 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                             set_mode(mode);
                         }
                     }
-                    prop:value=move || {
-                        GAME.with_borrow(|gs| gs.study_mode().key().to_string())
-                    }
+                    prop:value=move || game_display.get().mode_key
                 >
                     {bjsc::StudyMode::ALL.iter().map(|m| {
                         let key = m.key();
