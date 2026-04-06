@@ -246,8 +246,8 @@ impl Deck {
                 }
                 Some(item) => {
                     match item.box_level {
-                        0..=1 => weak += 1,
-                        2..=6 => learning += 1,
+                        0..=3 => weak += 1,
+                        4..=6 => learning += 1,
                         _ => mastered += 1, // box 7-8
                     }
                     if item.is_due(now) {
