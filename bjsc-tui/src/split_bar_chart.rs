@@ -53,13 +53,13 @@ impl SplitBarChart<'_> {
 
             // Bar segments
             let bar_x = area.x + label_width;
-            let primary_width = if max_val > 0 {
-                (bar.primary as f64 / max_val as f64 * bar_area_width as f64) as u16
+            let primary_width = if bar.primary > 0 {
+                ((bar.primary as f64 / max_val as f64 * bar_area_width as f64) as u16).max(1)
             } else {
                 0
             };
-            let secondary_width = if max_val > 0 {
-                (bar.secondary as f64 / max_val as f64 * bar_area_width as f64) as u16
+            let secondary_width = if bar.secondary > 0 {
+                ((bar.secondary as f64 / max_val as f64 * bar_area_width as f64) as u16).max(1)
             } else {
                 0
             };
