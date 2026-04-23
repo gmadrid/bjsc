@@ -7,6 +7,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const ALLOWED_ORIGINS = [
   "https://gmadrid.github.io",
   "http://localhost:8080",
+  "http://localhost:3141",
 ];
 
 function corsHeaders(req: Request) {
@@ -140,12 +141,51 @@ Deno.serve(async (req) => {
 
 Keep your response concise (under 300 words). Use short paragraphs. Reference specific hands when discussing mistakes.
 
-Blackjack basic strategy key concepts:
-- Hard totals: no usable ace (e.g., hard 16 = T+6)
-- Soft totals: has a usable ace (e.g., soft 17 = A+6)
-- Splits: pair decisions (e.g., split:8 = pair of 8s)
-- Table index format: "type:row,col" where col is dealer's up card (1=Ace, 2-10)
-- Actions: Hit, Stand, Double, Split`;
+IMPORTANT: Use ONLY the strategy tables below when coaching. Do NOT use any other basic strategy — the user is training with these exact tables.
+
+Table index format: "type:row,col" where col is dealer's up card (1=Ace, 2-10).
+Actions: H=Hit, S=Stand, Dh=Double (Hit if can't), Ds=Double (Stand if can't), P=Split, Pd=Split (DAS only, otherwise don't split).
+
+## Hard Totals
+Columns: 2  3  4  5  6  7  8  9  T  A
+8-:       H  H  H  H  H  H  H  H  H  H
+9:        H  Dh Dh Dh Dh H  H  H  H  H
+10:       Dh Dh Dh Dh Dh Dh Dh Dh H  H
+11:       Dh Dh Dh Dh Dh Dh Dh Dh Dh Dh
+12:       H  H  S  S  S  H  H  H  H  H
+13:       S  S  S  S  S  H  H  H  H  H
+14:       S  S  S  S  S  H  H  H  H  H
+15:       S  S  S  S  S  H  H  H  H  H
+16:       S  S  S  S  S  H  H  H  H  H
+17+:      S  S  S  S  S  S  S  S  S  S
+
+## Soft Totals
+Columns: 2  3  4  5  6  7  8  9  T  A
+A,2 (13): H  H  H  Dh Dh H  H  H  H  H
+A,3 (14): H  H  H  Dh Dh H  H  H  H  H
+A,4 (15): H  H  Dh Dh Dh H  H  H  H  H
+A,5 (16): H  H  Dh Dh Dh H  H  H  H  H
+A,6 (17): H  Dh Dh Dh Dh H  H  H  H  H
+A,7 (18): Ds Ds Ds Ds Ds S  S  H  H  H
+A,8 (19): S  S  S  S  Ds S  S  S  S  S
+A,9 (20): S  S  S  S  S  S  S  S  S  S
+A,T (21): S  S  S  S  S  S  S  S  S  S
+
+## Pair Splitting
+Columns: 2  3  4  5  6  7  8  9  T  A
+A,A:      P  P  P  P  P  P  P  P  P  P
+2,2:      Pd Pd P  P  P  P  -  -  -  -
+3,3:      Pd Pd P  P  P  P  -  -  -  -
+4,4:      -  -  -  Pd Pd -  -  -  -  -
+5,5:      -  -  -  -  -  -  -  -  -  -
+6,6:      Pd P  P  P  P  -  -  -  -  -
+7,7:      P  P  P  P  P  P  -  -  -  -
+8,8:      P  P  P  P  P  P  P  P  P  P
+9,9:      P  P  P  P  P  -  P  P  -  -
+T,T:      -  -  -  -  -  -  -  -  -  -
+
+("-" means do NOT split; use the hard total instead. "Pd" means split only with DAS.)
+Rules: 6-deck shoe, dealer stands on soft 17, double after split allowed (DAS), no surrender.`;
 
     const userMessage = `Here's my practice data:
 
