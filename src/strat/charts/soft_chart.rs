@@ -1,8 +1,8 @@
-use crate::strat::charts::ChartAction::{DblH, DblS, Hit_, Stnd};
-use crate::strat::charts::{as_chart_column, Chart, ChartAction};
-use crate::strat::tableindex::TableType::Soft;
-use crate::strat::tableindex::{new_table_index, ColIndex, RowIndex, TableIndex};
 use crate::strat::ChartAction::NoAc;
+use crate::strat::charts::ChartAction::{DblH, DblS, Hit_, Stnd};
+use crate::strat::charts::{Chart, ChartAction, as_chart_column};
+use crate::strat::tableindex::TableType::Soft;
+use crate::strat::tableindex::{ColIndex, RowIndex, TableIndex, new_table_index};
 use crate::{BjError, BjResult, Hand};
 
 // Standard Basic Strategy Soft Totals from BJA

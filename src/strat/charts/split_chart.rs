@@ -1,7 +1,7 @@
 use crate::strat::charts::ChartAction::{NoAc, SDas, Splt};
-use crate::strat::charts::{as_chart_column, Chart, ChartAction};
+use crate::strat::charts::{Chart, ChartAction, as_chart_column};
 use crate::strat::tableindex::TableType::Split;
-use crate::strat::tableindex::{new_table_index, ColIndex, RowIndex, TableIndex};
+use crate::strat::tableindex::{ColIndex, RowIndex, TableIndex, new_table_index};
 use crate::{BjError, BjResult, Hand};
 
 // Standard Basic Strategy Pair Splitting from BJA

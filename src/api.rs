@@ -1,8 +1,8 @@
-use crate::supabase::{
-    coaching_request, fetch_answer_logs_request, fetch_deck_request, insert_answer_log_request,
-    upsert_deck_request, AnswerLogEntry, AnswerLogRow, SupabaseConfig, UserDeckRow,
-};
 use crate::StudyMode;
+use crate::supabase::{
+    AnswerLogEntry, AnswerLogRow, SupabaseConfig, UserDeckRow, coaching_request,
+    fetch_answer_logs_request, fetch_deck_request, insert_answer_log_request, upsert_deck_request,
+};
 use spaced_rep::Deck;
 use std::borrow::Cow;
 

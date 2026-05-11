@@ -1,4 +1,4 @@
-use bjsc::supabase::{parse_refresh_response, user_id_from_jwt, SupabaseConfig};
+use bjsc::supabase::{SupabaseConfig, parse_refresh_response, user_id_from_jwt};
 use std::fs;
 use std::path::PathBuf;
 

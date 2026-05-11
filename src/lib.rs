@@ -19,10 +19,10 @@ pub use gamestate::{AnswerResult, GameState};
 pub use hand::Hand;
 pub use hand_builder::build_hand_for_index;
 pub use persistence::SavedState;
-pub use spaced_rep::{DeckSummary, BOX_LABELS};
+pub use spaced_rep::{BOX_LABELS, DeckSummary};
 pub use strat::{
-    all_charts, all_phrases, phrase_for_row, Action, ChartAction, StrategyChart, TableIndex,
-    TableType,
+    Action, ChartAction, StrategyChart, TableIndex, TableType, all_charts, all_phrases,
+    phrase_for_row,
 };
 pub use studymode::StudyMode;
 pub use supabase::{AuthSession, SupabaseConfig};

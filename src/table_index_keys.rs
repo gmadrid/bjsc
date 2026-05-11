@@ -1,5 +1,5 @@
 use crate::strat::{
-    lookup_by_index, new_table_index, ChartAction, ColIndex, RowIndex, TableIndex, TableType,
+    ChartAction, ColIndex, RowIndex, TableIndex, TableType, lookup_by_index, new_table_index,
 };
 use crate::studymode::StudyMode;
 
@@ -45,10 +45,10 @@ pub fn indices_for_mode(mode: StudyMode) -> Vec<TableIndex> {
             let mut result = Vec::new();
             for tt in [TableType::Hard, TableType::Soft] {
                 for idx in indices_for_type(tt) {
-                    if let Ok(action) = lookup_by_index(&idx) {
-                        if matches!(action, ChartAction::DblH | ChartAction::DblS) {
-                            result.push(idx);
-                        }
+                    if let Ok(action) = lookup_by_index(&idx)
+                        && matches!(action, ChartAction::DblH | ChartAction::DblS)
+                    {
+                        result.push(idx);
                     }
                 }
             }

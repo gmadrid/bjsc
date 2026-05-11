@@ -7,9 +7,9 @@ mod screen_picker;
 mod strategy;
 
 use crate::App;
+use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 use std::io;
 
 use crate::Screen;

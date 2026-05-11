@@ -1,9 +1,9 @@
+use crate::Action::Double;
 use crate::strat::charts::hard_chart::HardChart;
 use crate::strat::charts::soft_chart::SoftChart;
 use crate::strat::charts::split_chart::SplitChart;
 use crate::strat::charts::surrender_chart::SurrenderChart;
 use crate::strat::tableindex::{ColIndex, TableIndex};
-use crate::Action::Double;
 use crate::{Action, BjResult, Hand};
 
 mod hard_chart;
@@ -239,18 +239,14 @@ trait Chart {
 // This function maps ColIndex into chart columns.
 fn as_chart_column(ci: ColIndex) -> usize {
     let val = ci.value();
-    if val == 1 {
-        9
-    } else {
-        (val - 2) as usize
-    }
+    if val == 1 { 9 } else { (val - 2) as usize }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::card::Card;
-    use crate::strat::{new_table_index, ColIndex, RowIndex, TableType};
+    use crate::strat::{ColIndex, RowIndex, TableType, new_table_index};
     use std::str::FromStr;
 
     pub fn lookup_test_hands<C: Chart>(player: &[&str], dealer: &[&str]) -> BjResult<ChartAction> {

@@ -11,7 +11,7 @@ pub use table_type::TableType;
 
 #[macro_export]
 macro_rules! rowidx {
-    ($arg1:expr, $arg2:expr) => {
+    ($arg1:expr_2021, $arg2:expr_2021) => {
         RowIndex::new($arg1, $arg2).unwrap()
     };
 }

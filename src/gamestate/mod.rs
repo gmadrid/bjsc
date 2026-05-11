@@ -1,12 +1,12 @@
+use crate::BjResult;
 use crate::hand::Hand;
 use crate::hand_builder::build_hand_for_index;
 use crate::shoe::Shoe;
 use crate::strat::{
-    lookup_action, phrase_for_row, Action, ChartAction, RowIndex, TableIndex, TableType,
+    Action, ChartAction, RowIndex, TableIndex, TableType, lookup_action, phrase_for_row,
 };
 use crate::studymode::StudyMode;
 use crate::table_index_keys::{indices_for_mode, keys_for_mode, table_index_to_key};
-use crate::BjResult;
 use rand::prelude::*;
 use spaced_rep::Deck;
 

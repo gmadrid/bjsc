@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 macro_rules! phrase_row {
-    ($m:expr, $t:expr, $c:expr, $p:expr) => {
+    ($m:expr_2021, $t:expr_2021, $c:expr_2021, $p:expr_2021) => {
         $m.insert(rowidx!($t, $c), $p);
     };
 }
@@ -22,7 +22,12 @@ static PHRASES: LazyLock<HashMap<RowIndex, &'static str>> = LazyLock::new(|| {
         15,
         "15 surrenders against dealer 10, otherwise don’t surrender (revert to hard totals)."
     );
-    phrase_row!(m, Surrender, 16, "16 surrenders against dealer 9 through Ace, otherwise don’t surrender (revert to hard totals).");
+    phrase_row!(
+        m,
+        Surrender,
+        16,
+        "16 surrenders against dealer 9 through Ace, otherwise don’t surrender (revert to hard totals)."
+    );
 
     phrase_row!(m, Split, Ace.value() - 10, "Always split Aces.");
     phrase_row!(
@@ -100,7 +105,12 @@ static PHRASES: LazyLock<HashMap<RowIndex, &'static str>> = LazyLock::new(|| {
         17,
         "Soft 17 (A,6) doubles against dealer 3 through 6, otherwise hit."
     );
-    phrase_row!(m, Soft, 18, "Soft 18 (A,7) doubles against dealer 2 through 6, and hits against 9 through Ace, otherwise stand.");
+    phrase_row!(
+        m,
+        Soft,
+        18,
+        "Soft 18 (A,7) doubles against dealer 2 through 6, and hits against 9 through Ace, otherwise stand."
+    );
     phrase_row!(
         m,
         Soft,

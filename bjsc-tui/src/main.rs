@@ -4,14 +4,14 @@ mod draw;
 mod split_bar_chart;
 
 use auth::AuthTokens;
-use bjsc::{persistence, Action, GameState, SupabaseConfig};
+use bjsc::{Action, GameState, SupabaseConfig, persistence};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use std::io;
 use std::sync::mpsc;
 
@@ -77,10 +77,10 @@ impl App {
             let config = supabase_config();
 
             // Proactively refresh if token is expired
-            if bjsc::supabase::is_jwt_expired(&auth.access_token) {
-                if let Some(new_auth) = auth::refresh_tokens(&config, auth, &rt) {
-                    *auth = new_auth;
-                }
+            if bjsc::supabase::is_jwt_expired(&auth.access_token)
+                && let Some(new_auth) = auth::refresh_tokens(&config, auth, &rt)
+            {
+                *auth = new_auth;
             }
 
             let result = rt.block_on(bjsc::api::fetch_user_deck(
@@ -432,11 +432,11 @@ impl App {
     }
 
     fn poll_coaching(&mut self) {
-        if let Some(ref rx) = self.coaching_rx {
-            if let Ok(text) = rx.try_recv() {
-                self.coaching_text = text;
-                self.coaching_rx = None;
-            }
+        if let Some(ref rx) = self.coaching_rx
+            && let Ok(text) = rx.try_recv()
+        {
+            self.coaching_text = text;
+            self.coaching_rx = None;
         }
     }
 
@@ -534,14 +534,14 @@ fn main() -> io::Result<()> {
         }
         draw::draw(&mut terminal, &app)?;
 
-        if event::poll(std::time::Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-                if app.handle_key(key.code) {
-                    break;
-                }
+        if event::poll(std::time::Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+        {
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+            if app.handle_key(key.code) {
+                break;
             }
         }
     }

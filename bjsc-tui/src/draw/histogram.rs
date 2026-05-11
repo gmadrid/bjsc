@@ -1,5 +1,5 @@
-use crate::split_bar_chart::{SplitBar, SplitBarChart};
 use crate::App;
+use crate::split_bar_chart::{SplitBar, SplitBarChart};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
