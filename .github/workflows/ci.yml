@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout bjsc
+        uses: actions/checkout@v6
+        with:
+          path: bjsc
+      - name: Checkout leit-core
+        uses: actions/checkout@v6
+        with:
+          repository: gmadrid/leit-core
+          path: leit-core
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: bjsc -> target
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: bjsc
+
+  test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout bjsc
+        uses: actions/checkout@v6
+        with:
+          path: bjsc
+      - name: Checkout leit-core
+        uses: actions/checkout@v6
+        with:
+          repository: gmadrid/leit-core
+          path: leit-core
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: bjsc -> target
+      - run: cargo test --workspace
+        working-directory: bjsc
+
+  build:
+    name: cargo build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout bjsc
+        uses: actions/checkout@v6
+        with:
+          path: bjsc
+      - name: Checkout leit-core
+        uses: actions/checkout@v6
+        with:
+          repository: gmadrid/leit-core
+          path: leit-core
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: bjsc -> target
+      - run: cargo build --workspace --all-targets
+        working-directory: bjsc
