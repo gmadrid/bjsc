@@ -2407,7 +2407,6 @@ dependencies = [
  "js-sys",
  "rand",
  "serde",
- "serde_json",
 ]
 
 [[package]]

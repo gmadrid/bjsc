@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 bjsc = { path = ".." }
-spaced-rep = { path = "../spaced-rep" }
+spaced-rep = { path = "../../leit-core/spaced-rep" }
 crossterm = "0.28"
 open = "5"
 ratatui = "0.29"

@@ -18,7 +18,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout bjsc
+        uses: actions/checkout@v6
+        with:
+          path: bjsc
+
+      - name: Checkout leit-core
+        uses: actions/checkout@v6
+        with:
+          repository: gmadrid/leit-core
+          path: leit-core
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -28,7 +37,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ". -> target"
+          workspaces: bjsc -> target
 
       - name: Install trunk
         uses: jetli/trunk-action@v0.5.1
@@ -41,17 +50,17 @@ jobs:
           version: 10
 
       - name: Install Node dependencies
-        working-directory: bjsc-web
+        working-directory: bjsc/bjsc-web
         run: pnpm install
 
       - name: Build
-        working-directory: bjsc-web
+        working-directory: bjsc/bjsc-web
         run: trunk build --release --public-url /bjsc/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: bjsc-web/dist
+          path: bjsc/bjsc-web/dist
 
   deploy-pages:
     needs: build
