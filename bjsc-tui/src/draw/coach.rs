@@ -75,10 +75,8 @@ fn markdown_to_text(md: &str) -> Vec<Line<'_>> {
             Event::Start(Tag::Item) => {
                 list_bullet = true;
             }
-            Event::End(TagEnd::Item) => {
-                if !spans.is_empty() {
-                    lines.push(Line::from(std::mem::take(&mut spans)));
-                }
+            Event::End(TagEnd::Item) if !spans.is_empty() => {
+                lines.push(Line::from(std::mem::take(&mut spans)));
             }
             Event::Text(text) => {
                 if list_bullet {
@@ -99,10 +97,8 @@ fn markdown_to_text(md: &str) -> Vec<Line<'_>> {
             Event::SoftBreak => {
                 spans.push(Span::raw(" "));
             }
-            Event::HardBreak => {
-                if !spans.is_empty() {
-                    lines.push(Line::from(std::mem::take(&mut spans)));
-                }
+            Event::HardBreak if !spans.is_empty() => {
+                lines.push(Line::from(std::mem::take(&mut spans)));
             }
             Event::Code(code) => {
                 spans.push(Span::styled(
