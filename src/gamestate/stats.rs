@@ -67,7 +67,7 @@ impl Stats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strat::{new_table_index, ColIndex, RowIndex, TableIndex, TableType};
+    use crate::strat::{ColIndex, RowIndex, TableIndex, TableType, new_table_index};
 
     fn make_table_index(tt: TableType, row: u8, col: u8) -> TableIndex {
         let ri = RowIndex::new(tt, row).unwrap();

@@ -6,8 +6,8 @@ use bjsc::{Action, GameState, Stats, SupabaseConfig};
 use leptos::prelude::*;
 use spaced_rep::NUM_BOXES;
 use std::cell::RefCell;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Screen {
@@ -89,13 +89,13 @@ fn schedule_drill_timer(timer_id: RwSignal<Option<i32>>, game_display: RwSignal<
             // Refresh display (updates countdown or shows new card)
             game_display.set(read_display());
         });
-        if let Some(w) = web_sys::window() {
-            if let Ok(id) = w.set_interval_with_callback_and_timeout_and_arguments_0(
+        if let Some(w) = web_sys::window()
+            && let Ok(id) = w.set_interval_with_callback_and_timeout_and_arguments_0(
                 cb.as_ref().unchecked_ref(),
                 1000,
-            ) {
-                timer_id.set(Some(id));
-            }
+            )
+        {
+            timer_id.set(Some(id));
         }
         cb.forget();
     }
@@ -325,10 +325,10 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
             let log_data = result.log_data();
             status_text.set(result.status_message());
             status_is_error.set(!result.correct);
-            if !result.correct {
-                if let Some(entry) = result.log_entry {
-                    errors.update(|e| e.insert(0, entry));
-                }
+            if !result.correct
+                && let Some(entry) = result.log_entry
+            {
+                errors.update(|e| e.insert(0, entry));
             }
             status_visible.set(true);
             if shoe_done && !is_drill {
@@ -380,18 +380,18 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
     let menu_open = RwSignal::new(false);
 
     let go_to_screen = move |next: Screen| {
-        if next == Screen::Progress {
-            if let Some(auth) = auth_state.get_untracked() {
-                let config = supabase_config();
-                let token = auth.access_token.clone();
-                leptos::task::spawn_local(async move {
-                    if let Ok(logs) =
-                        bjsc::api::fetch_answer_logs(&api::GlooClient, &config, &token, 1000).await
-                    {
-                        progress_stats.set(bjsc::progress::ProgressStats::from_logs(&logs));
-                    }
-                });
-            }
+        if next == Screen::Progress
+            && let Some(auth) = auth_state.get_untracked()
+        {
+            let config = supabase_config();
+            let token = auth.access_token.clone();
+            leptos::task::spawn_local(async move {
+                if let Ok(logs) =
+                    bjsc::api::fetch_answer_logs(&api::GlooClient, &config, &token, 1000).await
+                {
+                    progress_stats.set(bjsc::progress::ProgressStats::from_logs(&logs));
+                }
+            });
         }
         if next == Screen::Coach {
             let current_count = GAME.with_borrow(|gs| gs.stats().question_count);
@@ -495,10 +495,10 @@ fn GameView(auth_state: RwSignal<Option<AuthState>>) -> impl IntoView {
                 }
                 return;
             }
-            if let Some(ch) = key.chars().next() {
-                if let Some(action) = Action::from_key(ch) {
-                    do_action(action);
-                }
+            if let Some(ch) = key.chars().next()
+                && let Some(action) = Action::from_key(ch)
+            {
+                do_action(action);
             }
         });
     // Clone the JS function reference for cleanup, then register the listener.

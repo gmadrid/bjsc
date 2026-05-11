@@ -1,6 +1,6 @@
 use crate::strat::charts::ChartAction::{DblH, Hit_, Stnd};
-use crate::strat::charts::{as_chart_column, Chart, ChartAction};
-use crate::strat::tableindex::{new_table_index, ColIndex, RowIndex, TableIndex, TableType};
+use crate::strat::charts::{Chart, ChartAction, as_chart_column};
+use crate::strat::tableindex::{ColIndex, RowIndex, TableIndex, TableType, new_table_index};
 use crate::{BjError, BjResult, Hand};
 
 // Standard Basic Strategy Hard Totals from BJA

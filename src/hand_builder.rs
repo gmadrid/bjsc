@@ -112,7 +112,7 @@ fn build_split_hand(hand: &mut Hand, row: u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::strat::{new_table_index, ColIndex, RowIndex};
+    use crate::strat::{ColIndex, RowIndex, new_table_index};
 
     fn make_index(tt: TableType, row: u8, col: u8) -> TableIndex {
         let ri = RowIndex::new(tt, row).unwrap();

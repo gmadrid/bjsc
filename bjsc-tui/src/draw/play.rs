@@ -1,7 +1,7 @@
 use crate::{App, StatusMessage};
+use bjsc::Stats;
 use bjsc::card::Card;
 use bjsc::hand::Hand;
-use bjsc::Stats;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};

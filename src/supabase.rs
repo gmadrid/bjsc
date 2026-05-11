@@ -10,8 +10,8 @@ use spaced_rep::Deck;
 use std::borrow::Cow;
 
 pub use leit_auth::{
-    common_headers, email_from_jwt, is_jwt_expired, parse_refresh_response, refresh_token_request,
-    user_id_from_jwt, AuthSession, RequestDetails, SupabaseConfig,
+    AuthSession, RequestDetails, SupabaseConfig, common_headers, email_from_jwt, is_jwt_expired,
+    parse_refresh_response, refresh_token_request, user_id_from_jwt,
 };
 
 pub const SUPABASE_URL: &str = "https://pecwxusghnxlvzmfcqrj.supabase.co";

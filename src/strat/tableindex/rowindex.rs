@@ -1,5 +1,5 @@
-use crate::strat::tableindex::table_type::TableType;
 use crate::BjError::BadRowIndex;
+use crate::strat::tableindex::table_type::TableType;
 use crate::{BjError, BjResult};
 use std::fmt::Display;
 use std::str::FromStr;
