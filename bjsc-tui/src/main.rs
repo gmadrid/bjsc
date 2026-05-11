@@ -16,7 +16,7 @@ use std::io;
 use std::sync::mpsc;
 
 fn supabase_config() -> SupabaseConfig {
-    SupabaseConfig::default()
+    bjsc::supabase::default_config()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

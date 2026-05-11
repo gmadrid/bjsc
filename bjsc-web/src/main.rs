@@ -49,7 +49,7 @@ thread_local! {
 }
 
 fn supabase_config() -> SupabaseConfig {
-    SupabaseConfig::default()
+    bjsc::supabase::default_config()
 }
 
 fn main() {

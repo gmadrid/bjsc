@@ -1,23 +1,27 @@
+//! bjsc-specific Supabase schema and request builders.
+//!
+//! Generic primitives (config struct, request shape, auth session, JWT
+//! helpers, refresh) live in the `leit-auth` crate; this module re-exports
+//! them so callers can keep their existing `bjsc::supabase::*` imports.
+
 use crate::studymode::StudyMode;
 use serde::{Deserialize, Serialize};
 use spaced_rep::Deck;
+use std::borrow::Cow;
+
+pub use leit_auth::{
+    common_headers, email_from_jwt, is_jwt_expired, parse_refresh_response, refresh_token_request,
+    user_id_from_jwt, AuthSession, RequestDetails, SupabaseConfig,
+};
 
 pub const SUPABASE_URL: &str = "https://pecwxusghnxlvzmfcqrj.supabase.co";
 pub const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlY3d4dXNnaG54bHZ6bWZjcXJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzNTY3MjUsImV4cCI6MjA5MDkzMjcyNX0.LwgaAHruQ8cA3mHrtCCB00WSqttpwRusAf0Y1WEFWuE";
 
-/// Supabase project configuration.
-#[derive(Debug, Clone)]
-pub struct SupabaseConfig {
-    pub base_url: String,
-    pub anon_key: String,
-}
-
-impl Default for SupabaseConfig {
-    fn default() -> Self {
-        Self {
-            base_url: SUPABASE_URL.to_string(),
-            anon_key: SUPABASE_ANON_KEY.to_string(),
-        }
+/// Default config for the bjsc Supabase project.
+pub fn default_config() -> SupabaseConfig {
+    SupabaseConfig {
+        base_url: SUPABASE_URL.to_string(),
+        anon_key: SUPABASE_ANON_KEY.to_string(),
     }
 }
 
@@ -33,44 +37,12 @@ pub struct UserDeckRow {
     pub updated_at: Option<String>,
 }
 
-/// Everything needed to make an HTTP request (no async, no HTTP client).
-pub struct RequestDetails {
-    pub url: String,
-    pub method: String,
-    pub headers: Vec<(String, String)>,
-    pub body: Option<String>,
-}
-
-fn common_headers(config: &SupabaseConfig, access_token: &str) -> Vec<(String, String)> {
-    vec![
-        ("apikey".to_string(), config.anon_key.clone()),
-        (
-            "Authorization".to_string(),
-            format!("Bearer {}", access_token),
-        ),
-    ]
-}
-
-/// Build a request to refresh an access token.
-pub fn refresh_token_request(config: &SupabaseConfig, refresh_token: &str) -> RequestDetails {
-    RequestDetails {
-        url: format!("{}/auth/v1/token?grant_type=refresh_token", config.base_url),
-        method: "POST".to_string(),
-        headers: vec![
-            ("apikey".to_string(), config.anon_key.clone()),
-            ("Content-Type".to_string(), "application/json".to_string()),
-        ],
-        body: Some(format!(r#"{{"refresh_token":"{}"}}"#, refresh_token)),
-    }
-}
-
 /// Build a request to fetch the user's deck.
 pub fn fetch_deck_request(config: &SupabaseConfig, access_token: &str) -> RequestDetails {
     let mut headers = common_headers(config, access_token);
-    // Return a single object instead of an array
     headers.push((
-        "Accept".to_string(),
-        "application/vnd.pgrst.object+json".to_string(),
+        Cow::Borrowed("Accept"),
+        Cow::Borrowed("application/vnd.pgrst.object+json"),
     ));
 
     RequestDetails {
@@ -90,11 +62,13 @@ pub fn upsert_deck_request(
     deck: &Deck,
 ) -> Result<RequestDetails, String> {
     let mut headers = common_headers(config, access_token);
-    headers.push(("Content-Type".to_string(), "application/json".to_string()));
-    // Upsert: insert or update on conflict
     headers.push((
-        "Prefer".to_string(),
-        "resolution=merge-duplicates".to_string(),
+        Cow::Borrowed("Content-Type"),
+        Cow::Borrowed("application/json"),
+    ));
+    headers.push((
+        Cow::Borrowed("Prefer"),
+        Cow::Borrowed("resolution=merge-duplicates"),
     ));
 
     let row = UserDeckRow {
@@ -102,7 +76,7 @@ pub fn upsert_deck_request(
         user_id: user_id.to_string(),
         study_mode: mode,
         deck: deck.clone(),
-        updated_at: None, // let the DB set this
+        updated_at: None,
     };
 
     Ok(RequestDetails {
@@ -130,7 +104,10 @@ pub fn insert_answer_log_request(
     row: &AnswerLogRow,
 ) -> Result<RequestDetails, String> {
     let mut headers = common_headers(config, access_token);
-    headers.push(("Content-Type".to_string(), "application/json".to_string()));
+    headers.push((
+        Cow::Borrowed("Content-Type"),
+        Cow::Borrowed("application/json"),
+    ));
 
     Ok(RequestDetails {
         url: format!("{}/rest/v1/answer_log", config.base_url),
@@ -147,7 +124,7 @@ pub fn fetch_answer_logs_request(
     limit: u32,
 ) -> RequestDetails {
     let mut headers = common_headers(config, access_token);
-    headers.push(("Accept".to_string(), "application/json".to_string()));
+    headers.push((Cow::Borrowed("Accept"), Cow::Borrowed("application/json")));
 
     RequestDetails {
         url: format!(
@@ -173,282 +150,15 @@ pub struct AnswerLogEntry {
 /// Build a request to call the coaching edge function.
 pub fn coaching_request(config: &SupabaseConfig, access_token: &str) -> RequestDetails {
     let mut headers = common_headers(config, access_token);
-    headers.push(("Content-Type".to_string(), "application/json".to_string()));
+    headers.push((
+        Cow::Borrowed("Content-Type"),
+        Cow::Borrowed("application/json"),
+    ));
 
     RequestDetails {
         url: format!("{}/functions/v1/coaching", config.base_url),
         method: "POST".to_string(),
         headers,
         body: Some("{}".to_string()),
-    }
-}
-
-/// Authenticated session data shared across frontends.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthSession {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub user_id: String,
-    #[serde(default)]
-    pub email: String,
-}
-
-/// Parse a token-refresh JSON response into an AuthSession.
-/// The `old_refresh_token` is used as a fallback if the response doesn't include a new one.
-pub fn parse_refresh_response(
-    json: &serde_json::Value,
-    old_refresh_token: &str,
-) -> Option<AuthSession> {
-    let access_token = json.get("access_token")?.as_str()?.to_string();
-    let refresh_token = json
-        .get("refresh_token")
-        .and_then(|v| v.as_str())
-        .unwrap_or(old_refresh_token)
-        .to_string();
-    let user_id = user_id_from_jwt(&access_token)?;
-    let email = email_from_jwt(&access_token).unwrap_or_default();
-
-    Some(AuthSession {
-        access_token,
-        refresh_token,
-        user_id,
-        email,
-    })
-}
-
-/// Decode the JWT payload as a JSON Value.
-fn jwt_payload(token: &str) -> Option<serde_json::Value> {
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() != 3 {
-        return None;
-    }
-    let payload = parts[1];
-    let padded = match payload.len() % 4 {
-        2 => format!("{}==", payload),
-        3 => format!("{}=", payload),
-        _ => payload.to_string(),
-    };
-    let decoded = base64_decode(&padded)?;
-    serde_json::from_slice(&decoded).ok()
-}
-
-/// Check if a JWT's `exp` claim is in the past (with a 60-second buffer).
-pub fn is_jwt_expired(token: &str) -> bool {
-    let Some(payload) = jwt_payload(token) else {
-        return true;
-    };
-    let Some(exp) = payload.get("exp").and_then(|v| v.as_u64()) else {
-        return true;
-    };
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    // Treat as expired if within 60 seconds of expiry
-    now + 60 >= exp
-}
-
-/// Extract the `sub` (user ID) from a JWT without verification.
-pub fn user_id_from_jwt(token: &str) -> Option<String> {
-    jwt_payload(token)?
-        .get("sub")?
-        .as_str()
-        .map(|s| s.to_string())
-}
-
-/// Extract the email from a JWT without verification.
-pub fn email_from_jwt(token: &str) -> Option<String> {
-    jwt_payload(token)?
-        .get("email")?
-        .as_str()
-        .map(|s| s.to_string())
-}
-
-/// Minimal base64 URL-safe decoder (no external crate needed).
-fn base64_decode(input: &str) -> Option<Vec<u8>> {
-    // Convert URL-safe base64 to standard base64
-    let standard: String = input
-        .chars()
-        .map(|c| match c {
-            '-' => '+',
-            '_' => '/',
-            c => c,
-        })
-        .collect();
-
-    // Simple base64 decode
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut output = Vec::new();
-    let mut buf = 0u32;
-    let mut bits = 0u32;
-
-    for c in standard.bytes() {
-        let val = if c == b'=' {
-            break;
-        } else if let Some(pos) = TABLE.iter().position(|&b| b == c) {
-            pos as u32
-        } else {
-            return None;
-        };
-        buf = (buf << 6) | val;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            output.push((buf >> bits) as u8);
-            buf &= (1 << bits) - 1;
-        }
-    }
-    Some(output)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // All test JWTs use a fake signature "fake_sig" — we never verify signatures.
-    // Payloads are real base64url-encoded JSON.
-
-    // Payload: {"sub":"12345678-abcd-1234-abcd-123456789abc","role":"authenticated"}
-    const JWT_WITH_SUB: &str =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
-         .eyJzdWIiOiIxMjM0NTY3OC1hYmNkLTEyMzQtYWJjZC0xMjM0NTY3ODlhYmMiLCJyb2xlIjoiYXV0aGVudGljYXRlZCJ9\
-         .fake_signature";
-
-    // Payload: {"sub":"user-abc","email":"test@example.com","exp":9999999999}
-    // exp = 9999999999 (year 2286) - clearly not expired
-    const JWT_NOT_EXPIRED: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
-         .eyJzdWIiOiJ1c2VyLWFiYyIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsImV4cCI6OTk5OTk5OTk5OX0\
-         .fake_sig";
-
-    // Payload: {"sub":"user-abc","email":"test@example.com","exp":1}
-    // exp = 1 (Unix epoch + 1s) - always expired
-    const JWT_EXPIRED: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
-         .eyJzdWIiOiJ1c2VyLWFiYyIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsImV4cCI6MX0\
-         .fake_sig";
-
-    // Payload: {"sub":"user-abc"} — no exp claim
-    const JWT_NO_EXP: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
-         .eyJzdWIiOiJ1c2VyLWFiYyJ9\
-         .fake_sig";
-
-    // --- user_id_from_jwt ---
-
-    #[test]
-    fn test_user_id_from_jwt() {
-        let uid = user_id_from_jwt(JWT_WITH_SUB);
-        assert_eq!(
-            uid,
-            Some("12345678-abcd-1234-abcd-123456789abc".to_string())
-        );
-    }
-
-    #[test]
-    fn test_user_id_from_invalid_jwt() {
-        assert_eq!(user_id_from_jwt("not-a-jwt"), None);
-        assert_eq!(user_id_from_jwt(""), None);
-    }
-
-    #[test]
-    fn user_id_from_jwt_two_parts_only_returns_none() {
-        assert_eq!(None, user_id_from_jwt("header.payload"));
-    }
-
-    // --- email_from_jwt ---
-
-    #[test]
-    fn email_from_jwt_with_email_claim() {
-        let email = email_from_jwt(JWT_NOT_EXPIRED);
-        assert_eq!(Some("test@example.com".to_string()), email);
-    }
-
-    #[test]
-    fn email_from_jwt_without_email_claim_returns_none() {
-        // JWT_WITH_SUB has no email field
-        let email = email_from_jwt(JWT_WITH_SUB);
-        assert_eq!(None, email);
-    }
-
-    #[test]
-    fn email_from_jwt_invalid_token_returns_none() {
-        assert_eq!(None, email_from_jwt("not.a.token"));
-    }
-
-    // --- is_jwt_expired ---
-
-    #[test]
-    fn is_jwt_expired_far_future_exp_returns_false() {
-        assert!(!is_jwt_expired(JWT_NOT_EXPIRED));
-    }
-
-    #[test]
-    fn is_jwt_expired_past_exp_returns_true() {
-        assert!(is_jwt_expired(JWT_EXPIRED));
-    }
-
-    #[test]
-    fn is_jwt_expired_no_exp_claim_returns_true() {
-        assert!(is_jwt_expired(JWT_NO_EXP));
-    }
-
-    #[test]
-    fn is_jwt_expired_malformed_token_returns_true() {
-        assert!(is_jwt_expired("not-a-token"));
-        assert!(is_jwt_expired(""));
-        assert!(is_jwt_expired("only.two-parts"));
-    }
-
-    #[test]
-    fn is_jwt_expired_invalid_base64_payload_returns_true() {
-        // Second segment is not valid base64
-        assert!(is_jwt_expired("header.!!!invalid!!!.sig"));
-    }
-
-    // --- parse_refresh_response ---
-
-    #[test]
-    fn parse_refresh_response_with_all_fields() {
-        let json = serde_json::json!({
-            "access_token": JWT_NOT_EXPIRED,
-            "refresh_token": "new_refresh_token_xyz",
-        });
-        let session = parse_refresh_response(&json, "old_refresh_token").unwrap();
-        assert_eq!(JWT_NOT_EXPIRED, session.access_token);
-        assert_eq!("new_refresh_token_xyz", session.refresh_token);
-        assert_eq!("user-abc", session.user_id);
-        assert_eq!("test@example.com", session.email);
-    }
-
-    #[test]
-    fn parse_refresh_response_falls_back_to_old_refresh_token_when_missing() {
-        let json = serde_json::json!({
-            "access_token": JWT_NOT_EXPIRED,
-            // no refresh_token key
-        });
-        let session = parse_refresh_response(&json, "old_refresh_token").unwrap();
-        assert_eq!("old_refresh_token", session.refresh_token);
-    }
-
-    #[test]
-    fn parse_refresh_response_missing_access_token_returns_none() {
-        let json = serde_json::json!({
-            "refresh_token": "some_refresh",
-        });
-        assert!(parse_refresh_response(&json, "old").is_none());
-    }
-
-    #[test]
-    fn parse_refresh_response_invalid_access_token_no_sub_returns_none() {
-        // JWT_NO_EXP has no sub claim -> user_id_from_jwt returns None -> parse returns None
-        let json = serde_json::json!({
-            "access_token": "header.payload.sig",
-            "refresh_token": "some_refresh",
-        });
-        assert!(parse_refresh_response(&json, "old").is_none());
-    }
-
-    #[test]
-    fn parse_refresh_response_empty_json_returns_none() {
-        let json = serde_json::json!({});
-        assert!(parse_refresh_response(&json, "old").is_none());
     }
 }

@@ -11,6 +11,7 @@ edition = "2021"
 
 [dependencies]
 itertools = "0.14.0"
+leit-auth = { path = "../leit-core/leit-auth" }
 spaced-rep = { path = "../leit-core/spaced-rep" }
 rand = "0.8.5"
 serde = { version = "1.0.217", features = ["derive"] }

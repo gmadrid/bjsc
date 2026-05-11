@@ -4,6 +4,7 @@ use crate::supabase::{
 };
 use crate::StudyMode;
 use spaced_rep::Deck;
+use std::borrow::Cow;
 
 /// A minimal HTTP response abstraction shared across frontends.
 pub struct HttpResponse {
@@ -17,7 +18,7 @@ pub trait HttpClient {
         &self,
         method: &str,
         url: &str,
-        headers: &[(String, String)],
+        headers: &[(Cow<'static, str>, Cow<'static, str>)],
         body: Option<&str>,
     ) -> impl std::future::Future<Output = Result<HttpResponse, String>>;
 }

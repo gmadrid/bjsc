@@ -160,6 +160,7 @@ name = "bjsc"
 version = "0.1.0"
 dependencies = [
  "itertools 0.14.0",
+ "leit-auth",
  "rand",
  "serde",
  "serde_json",
@@ -196,6 +197,7 @@ dependencies = [
  "gloo-net",
  "gloo-storage",
  "js-sys",
+ "leit-auth",
  "leptos",
  "pulldown-cmark",
  "serde",
@@ -1255,6 +1257,15 @@ name = "leb128fmt"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
+
+[[package]]
+name = "leit-auth"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "leptos"

@@ -1,5 +1,6 @@
 use bjsc::api::{HttpClient, HttpResponse};
 use gloo_net::http;
+use std::borrow::Cow;
 
 pub struct GlooClient;
 
@@ -8,7 +9,7 @@ impl HttpClient for GlooClient {
         &self,
         method: &str,
         url: &str,
-        headers: &[(String, String)],
+        headers: &[(Cow<'static, str>, Cow<'static, str>)],
         body: Option<&str>,
     ) -> Result<HttpResponse, String> {
         let mut builder = match method {
@@ -17,7 +18,7 @@ impl HttpClient for GlooClient {
             _ => return Err(format!("Unsupported method: {}", method)),
         };
         for (k, v) in headers {
-            builder = builder.header(k, v);
+            builder = builder.header(k.as_ref(), v.as_ref());
         }
         let request = if let Some(body) = body {
             builder.body(body).map_err(|e| format!("{}", e))?
