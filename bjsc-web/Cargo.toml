@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 bjsc = { path = ".." }
+leit-auth = { path = "../../leit-core/leit-auth", features = ["wasm"] }
 spaced-rep = { path = "../../leit-core/spaced-rep", features = ["wasm"] }
 console_error_panic_hook = "0.1"
 gloo-net = { version = "0.6", features = ["http"] }

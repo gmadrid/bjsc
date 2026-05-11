@@ -52,7 +52,7 @@ pub fn refresh_tokens(
     let result = rt.block_on(async {
         let mut builder = crate::api::CLIENT.post(&req.url);
         for (k, v) in &req.headers {
-            builder = builder.header(k, v);
+            builder = builder.header(k.as_ref(), v.as_ref());
         }
         if let Some(body) = req.body {
             builder = builder.body(body);
