@@ -40,6 +40,7 @@ pub struct UserDeckRow {
 /// Build a request to fetch the user's deck.
 pub fn fetch_deck_request(config: &SupabaseConfig, access_token: &str) -> RequestDetails {
     let mut headers = common_headers(config, access_token);
+    // PostgREST: return a single object instead of an array.
     headers.push((
         Cow::Borrowed("Accept"),
         Cow::Borrowed("application/vnd.pgrst.object+json"),
