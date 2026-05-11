@@ -18,11 +18,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout bjsc
+        uses: actions/checkout@v6
+        with:
+          path: bjsc
+      - name: Checkout leit-core
+        uses: actions/checkout@v6
+        with:
+          repository: gmadrid/leit-core
+          path: leit-core
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
       - run: cargo fmt --all --check
+        working-directory: bjsc
 
   clippy:
     name: cargo clippy
